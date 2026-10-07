@@ -2,6 +2,7 @@
 
 Standard SDK events used unchanged: reveal, winInfo, updateTumbleWin, setWin, setTotalWin,
 updateGlobalMult, updateFreeSpin, freeSpinEnd, wincap, finalWin.
+updateGlobalMult is sent only when the multiplier changes.
 
 All positions are board positions {"reel": 0-4, "row": 0-4}, row 0 at the top. The game has
 no padding rows, so nothing is offset.
@@ -15,6 +16,7 @@ WILD_DROP = "wildDrop"
 COLLAPSE_BOARD = "collapseBoard"
 STICKY_WILDS = "stickyWilds"
 REFINE_SYMBOL = "refineSymbol"
+PRIME_SYMBOLS = "primeSymbols"
 UPDATE_LIVES = "updateLives"
 
 
@@ -74,6 +76,22 @@ def bonus_trigger_event(gamestate) -> None:
         "totalFs": 0 if is_survival else int(gamestate.tot_fs),
         "lives": int(gamestate.lives) if is_survival else 0,
         "positions": deepcopy(gamestate.special_syms_on_board["scatter"]),
+    }
+    gamestate.book.add_event(event)
+
+
+def prime_symbols_event(gamestate) -> None:
+    """Prime spin: the lowest symbols removed for this spin (sent before the reveal).
+
+    removedSymbols never land on this spin; each one lands as `landAs` instead.
+    """
+    removed = list(gamestate.config.refine_order[: gamestate.refine_level])
+    event = {
+        "index": len(gamestate.book.events),
+        "type": PRIME_SYMBOLS,
+        "level": int(gamestate.refine_level),
+        "removedSymbols": removed,
+        "landAs": gamestate.apply_refine(removed[-1]) if removed else None,
     }
     gamestate.book.add_event(event)
 

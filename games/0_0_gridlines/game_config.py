@@ -7,7 +7,7 @@ from src.config.betmode import BetMode
 
 
 class GameConfig(Config):
-    """Grid-line pays on a 5x5 collapse grid, with three feature spins and three bonus games."""
+    """Grid-line pays on a 5x5 collapse grid, with two feature spins and three bonus games."""
 
     _instance = None
 
@@ -23,7 +23,6 @@ class GameConfig(Config):
         self.working_name = "Grid Line Pays"
         self.game_name = "grid_line_pays"
         self.wincap = 10000.0
-        self.refine_wincap = 2500.0  # max win of the "refine" bonus buy
         self.win_type = "gridlines"
         self.rtp = 0.9330
         self.construct_paths()
@@ -74,18 +73,24 @@ class GameConfig(Config):
 
         # Collapse rules (see readme.txt)
         self.centre_wild = True  # every winning run leaves a wild in its centre
-        self.mult_step_per_run = 1  # multiplier added for every winning run, applied from the next collapse
+        # The win multiplier climbs a ladder: every winning run moves it one step up, and the new
+        # value applies from the next collapse. The first ten steps add +1, after that the
+        # ladder gets steep, so long chains are what pay big.
+        self.mult_step_per_run = 1
+        self.mult_ladder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 14, 20, 28, 40, 55, 75, 100, 150, 200, 300, 400, 500, 750, 1000]
+        # Survival keeps its multiplier over many spins, so it climbs a plain +1 ladder instead.
+        self.bonus_mult_ladder = {"survival": list(range(1, 1001))}
 
         # Bonus games. Three or more scatters on the first drop trigger one of them.
         self.bonus_types = ["refine", "surge", "survival"]
         # scatters -> free spins (refine, surge) or lives (survival)
         self.bonus_awards = {
-            "refine": {3: 6, 4: 8, 5: 10},
-            "surge": {3: 8, 4: 10, 5: 12},
+            "refine": {3: 5, 4: 7, 5: 9},
+            "surge": {3: 4, 4: 6, 5: 8},
             "survival": {3: 3, 4: 4, 5: 5},
         }
         # Refine: after every winning spin the lowest symbol left is upgraded into the next one,
-        # and the multiplier the following spins start on rises by refine_mult_per_level.
+        # and the following spins start refine_steps_per_level higher on the multiplier ladder.
         self.refine_order = ["L5", "L4", "L3", "L2", "L1", "H4", "H3", "H2"]
         self.refine_into = {
             "L5": "L4",
@@ -97,14 +102,13 @@ class GameConfig(Config):
             "H3": "H2",
             "H2": "H1",
         }
-        self.refine_mult_per_level = 1
-        # Surge: wilds dropped on every spin, the multiplier never resets, a full line doubles it.
-        self.bonus_wild_drop = {"surge": {1: 3, 2: 2}}
-        self.surge_full_line_double = True
+        self.refine_steps_per_level = 1
+        # Surge: one wild dropped on every spin, and the multiplier ladder never resets.
+        self.bonus_wild_drop = {"surge": {1: 1}}
         # Survival: the multiplier is kept while spins keep winning. Hard stop on the number of
         # spins so a round can never run forever.
         self.survival_max_spins = 60
-        self.survival_start_wilds = 2  # wilds already on the grid for the first spin
+        self.survival_start_wilds = 1  # wilds already on the grid for the first spin
 
         # Only the keys (scatter counts) are read by the SDK; awards come from bonus_awards.
         self.freespin_triggers = {
@@ -167,13 +171,12 @@ class GameConfig(Config):
         # Scatter counts of a bonus triggered from a paid spin, and of a max-win round.
         natural_triggers = {3: 90, 4: 9, 5: 1}
         wincap_triggers = {4: 1, 5: 2}
-        # Refine cannot reach the game's win cap, so max-win rounds of paid spins use the other two.
-        wincap_bonuses = {"surge": 1, "survival": 1}
+        wincap_bonuses = {"refine": 1, "surge": 1, "survival": 1}
 
-        # Wild spin: 2 or 3 wilds are dropped onto the grid before it is evaluated.
-        wild_drop = {"wild_drop": {2: 4, 3: 1}}
-        # Prime spin: the three lowest symbols are already upgraded.
-        prime = {"refine_level": 3}
+        # Wild spin: 1 to 5 wilds are dropped onto the grid before it is evaluated.
+        wild_drop = {"wild_drop": {1: 60, 2: 25, 3: 10, 4: 3.5, 5: 1.5}}
+        # Prime spin: 2 to 5 of the lowest symbols are already upgraded.
+        prime = {"refine_level": {2: 60, 3: 28, 4: 10, 5: 2}}
 
         def feature_spin_mode(name: str, cost: float, quotas: dict, extra: dict) -> BetMode:
             """Bet mode for a paid spin (base game and the feature spins)."""
@@ -257,8 +260,7 @@ class GameConfig(Config):
                 {"wincap": 0.001, "refine": 0.04, "surge": 0.04, "survival": 0.05, "0": 0.02, "basegame": 0.849},
                 prime,
             ),
-            # Refine is the low-risk bonus: its own ceiling is lower than the game's win cap.
-            bonus_buy_mode("refine", 100.0, self.refine_wincap, {5: 1}),
+            bonus_buy_mode("refine", 100.0, self.wincap, wincap_triggers),
             bonus_buy_mode("surge", 150.0, self.wincap, wincap_triggers),
-            bonus_buy_mode("survival", 300.0, self.wincap, wincap_triggers),
+            bonus_buy_mode("survival", 200.0, self.wincap, wincap_triggers),
         ]

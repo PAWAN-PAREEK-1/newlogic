@@ -42,7 +42,7 @@ test:
 test_run:
 	@for f in $(TEST_NAMES); do \
 		echo "processing $$f"; \
-		$(VENV_PY) -m games.$$f.run --sims 2000; \
+		$(VENV_PY) -m games.$$f.run --sims 5000; \
 	done
 
 

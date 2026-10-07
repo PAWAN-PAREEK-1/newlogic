@@ -15,8 +15,8 @@ given in game_optimization.py:
   * every criteria gets its average win (hr x rtp x cost), so the mode lands on its RTP;
   * fixed-payout criteria (wincap, 0) spread their probability evenly over their books.
 
-"Smallest change" is the minimum relative-entropy projection (the same method mode_targets.py
-uses): inside a criteria each payout x is rescaled by exp(a + b * x). If a criteria's target
+"Smallest change" is the minimum relative-entropy projection: inside a criteria each payout x
+is rescaled by exp(a + b * x). If a criteria's target
 average equals its simulated average, nothing changes at all.
 
 It reads exactly what the Rust optimizer reads (library/configs/math_config.json, the mode's
@@ -50,12 +50,55 @@ import pandas as pd
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from optimization_program.mode_targets import TWO_POW_50, kl_projection
+from optimization_program.mode_targets import TWO_POW_50
 from optimization_program.optimization_precheck import PrecheckError, assign_books, parse_fences
 
 
 class NaturalWeightsError(RuntimeError):
     """A criteria target cannot be met from the simulated books."""
+
+
+def tilt_to_mean(q: np.ndarray, x: np.ndarray, target: float) -> tuple:
+    """Closest distribution to q (minimum relative entropy) whose mean of x is `target`.
+
+    The solution is q * exp(b * x), normalised. Its mean rises with b, so b is found by
+    bisection, which also works for a narrow payout band where x barely varies.
+    Returns (p, converged).
+    """
+    mean = float(q @ x)
+    spread = float(np.sqrt(q @ (x - mean) ** 2))
+    tol = 1e-12 * max(abs(target), 1.0)
+    if abs(mean - target) <= tol:
+        return q, True
+    if spread == 0.0:
+        return q, False
+    z = (x - mean) / spread
+
+    def tilted(b: float) -> np.ndarray:
+        w = b * z
+        p = q * np.exp(w - w.max())
+        return p / p.sum()
+
+    sign = 1.0 if target > mean else -1.0
+    low, high = 0.0, 1.0
+    for _ in range(200):  # grow the bracket until the target is passed
+        if sign * (float(tilted(sign * high) @ x) - target) >= 0:
+            break
+        low, high = high, high * 2.0
+    else:
+        return q, False
+    p = tilted(sign * high)
+    for _ in range(200):
+        mid = 0.5 * (low + high)
+        p = tilted(sign * mid)
+        error = float(p @ x) - target
+        if abs(error) <= tol:
+            return p, True
+        if sign * error < 0:
+            low = mid
+        else:
+            high = mid
+    return p, abs(float(p @ x) - target) <= 1e-9 * max(abs(target), 1.0)
 
 
 def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
@@ -99,7 +142,7 @@ def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
                     f"payouts {payouts.min():,.2f}..{payouts.max():,.2f}. Target = hr x rtp x cost."
                 )
             q = counts / counts.sum()
-            p, _, ok = kl_projection(q, np.vstack([np.ones_like(payouts), payouts]), np.array([1.0, target]))
+            p, ok = tilt_to_mean(q, payouts, target)
             if not ok:
                 raise NaturalWeightsError(
                     f"[{mode}] criteria '{fence.name}': could not reach the target average win {target:,.4f} "

@@ -8,6 +8,8 @@ symbols in any row or column.
 * 1 Wild (W), 1 Scatter (S)
 * 6 bet modes: base game, 2 feature spins, 3 bonus buys
 * RTP 93.30% in every mode, max win 10,000x
+* High volatility in every mode: most rounds pay a fraction of what they cost, a few pay
+  many times the cost
 * Stateless: every bet is one complete round, nothing is carried to the next bet. No
   jackpots, no gamble, no player choice during a round.
 
@@ -54,23 +56,37 @@ refilled the board only gets emptier, so a spin always ends (at most 12 collapse
 
 This is src/calculations/collapse.py, the counterpart of the SDK's tumble.py (which refills).
 
-Multiplier
+Multiplier ladder
 * Every spin starts at 1x.
-* Every winning run adds +1. The new value applies from the next collapse.
+* Every winning run moves the multiplier one step up this ladder:
+
+      x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x14 x20 x28 x40 x55 x75 x100 x150 x200 x300 x400 x500 x750 x1000
+
+  The new value applies from the next collapse.
   Example: two runs on the first board pay at 1x, the board after the collapse pays at 3x.
-* The base game and the feature spins reset to 1x on every spin. The bonus games change this
-  rule, each in its own way (below).
+* The first ten steps are +1 each. After that the ladder gets steep, so a long chain is
+  worth far more than a short one. This is where the big wins come from.
+* The base game and the feature spins go back to 1x on every spin. The bonus games change
+  this rule, each in its own way (below).
 
 
 ## Bet modes
 
     mode       cost   what the player gets
     base       1x     the base game
-    wildspin   5x     2 or 3 extra wilds are dropped onto the grid on every spin
-    primespin  20x    the three lowest symbols (L5, L4, L3) are gone: they all land as L2
+    wildspin   5x     1 to 5 extra wilds are dropped onto the grid on every spin
+    primespin  20x    2 to 5 of the lowest symbols are gone for the spin (see below)
     refine     100x   buys the Refine bonus
     surge      150x   buys the Surge bonus
-    survival   300x   buys the Survival bonus
+    survival   200x   buys the Survival bonus
+
+Wild spin: how many wilds drop is random on every spin - 1 (60%), 2 (25%), 3 (10%),
+4 (3.5%) or 5 (1.5%).
+
+Prime spin: how many symbols are removed is random on every spin - 2 (60%), 3 (28%),
+4 (10%) or 5 (2%). Removed symbols land as the next symbol up: with 2 removed L5 and L4
+land as L3, with 5 removed every low symbol lands as H4. Fewer symbol types means more
+and longer runs, so the spin climbs the ladder faster.
 
 Three or more scatters on the first drop of a paid spin (base, wildspin, primespin) trigger
 one of the three bonus games. Which one is decided by the maths at that moment, never by the
@@ -79,26 +95,26 @@ cannot retrigger.
 
 All three bonus games use the same win logic and collapse. They differ in what builds up.
 
-### Refine - the symbols build up (lowest risk)
-* 6 free spins (8 / 10 with 4 / 5 scatters).
+### Refine - the symbols build up
+* 5 free spins (7 / 9 with 4 / 5 scatters).
 * After every winning spin the lowest symbol still in play is upgraded for the rest of the
   bonus: L5 lands as L4, then L4 as L3 ... up to H2 landing as H1. Eight upgrades are possible.
-* Every upgrade also raises the multiplier the following spins START on by +1.
-* The multiplier still resets at the start of each spin (to 1 + upgrades).
-* Fewer symbol types means more and longer runs on every drop, so the bonus pays steadily.
-  Its ceiling is lower than the other two: max win of the "refine" buy is 2,500x.
+* Every upgrade also moves the START of the following spins one step up the ladder.
+* The multiplier still goes back to that start on every spin.
+* A bonus that wins early snowballs; one that starts with dead spins stays small.
 
-### Surge - the multiplier builds up (medium risk)
-* 8 free spins (10 / 12).
-* 1 or 2 wilds are dropped onto the grid on every spin.
-* The multiplier NEVER resets during the bonus.
-* A full line (a run of 5) doubles the multiplier, on top of its +1.
+### Surge - the ladder never resets
+* 4 free spins (6 / 8).
+* 1 wild is dropped onto the grid on every spin.
+* The multiplier NEVER goes back during the bonus. Every run on every spin is one more
+  step, so the later spins are played on the steep part of the ladder.
 
-### Survival - the wilds and the streak build up (highest risk)
+### Survival - the wilds and the streak build up
 * No spin counter. 3 lives (4 / 5).
-* The bonus starts with 2 wilds on the grid.
+* The bonus starts with 1 wild on the grid.
 * Wilds still on the grid when a spin ends stay in place for the next spin.
-* The multiplier is kept for as long as spins keep winning.
+* The multiplier is kept for as long as spins keep winning. Because a streak can run for
+  many spins, Survival uses a plain ladder: +1 per winning run (x1, x2, x3, ...).
 * A spin without a win costs one life and resets the multiplier to 1x.
 * The bonus ends when no life is left (hard stop after 60 spins).
 
@@ -110,8 +126,10 @@ Every bonus pays at least 0.1x: rounds that would pay nothing are not part of th
 Standard SDK events, unchanged:
     reveal, winInfo, updateTumbleWin, setWin, setTotalWin, updateGlobalMult,
     updateFreeSpin, freeSpinEnd, wincap, finalWin
+updateGlobalMult is sent whenever the multiplier changes value.
 
 Game events (game_events.py):
+    primeSymbols    {level, removedSymbols, landAs}     prime spin: symbols removed, before the reveal
     wildDrop        {positions}                         wilds dropped after a reveal
     collapseBoard   {explodingSymbols, newWilds}        one collapse step
     freeSpinTrigger {bonusType, totalFs, lives, positions}
@@ -124,6 +142,7 @@ Positions are {"reel": 0-4, "row": 0-4} with row 0 at the top. The game has no p
 
 Order of events in one spin:
 
+    primeSymbols                        (primespin)
     reveal                              the 25 symbols
     wildDrop                            (wildspin, surge)
     winInfo, updateTumbleWin            runs on the current board      } repeated while
@@ -168,12 +187,25 @@ From the repository root, after `make setup`:
 Upload the contents of library/publish_files to Stake Engine.
 
 Lookup-table weights. run.py uses `--optimizer natural` by default
-(optimization_program/natural_weights.py): the published probabilities are the simulated
-distribution, tilted only as far as needed to give every criteria its probability and
-average win from game_optimization.py. Wins then come as often as the mechanics produce
-them. `--optimizer rust` or `--optimizer go` runs the SDK optimizer instead; it hits the
-same RTP and criteria targets but draws its own shape inside each criteria, so tune
-"scaling" and "parameters" in game_optimization.py if you use it.
+(optimization_program/natural_weights.py): inside every criteria the published
+probabilities are the simulated distribution, tilted only as far as needed to reach the
+criteria's average win from game_optimization.py. `--optimizer rust` or `--optimizer go`
+runs the SDK optimizer on the same conditions instead; it draws its own shape inside each
+criteria, so tune "scaling" and "parameters" in game_optimization.py if you use it.
+
+How the payout distribution is set (game_optimization.py):
+* Base game: one criteria per bonus game with its hit rate, plus the spins without a
+  bonus. The shape inside each is what the game produces.
+* Bonus buys: the payout range is cut into bands, in multiples of the cost of the buy
+  (up to 0.1x, 0.25x, 0.5x, 1x, 2x, 5x, 10x, 25x, above). Every band has its share of
+  rounds in BUY_BANDS. This is what makes a buy volatile: about half of the rounds pay
+  less than a quarter of the cost, about 70% pay between 0.1x and 2x, the 2x-10x middle
+  is kept thin, and about 1.6% of the rounds pay more than 10x the cost. Change the
+  shares to make a buy calmer or wilder.
+* Feature spins (wildspin, primespin): the bonus games have their hit rates like in the
+  base game, and the spins without a bonus are cut into the same kind of bands
+  (SPIN_BANDS). The bonus games are triggered more often than the reels alone would,
+  which is where most of the volatility of these two modes comes from.
 
 The risk limits in game_optimization.py ("targets") are checked after either optimizer by
 optimization_program/mode_targets.py.
@@ -181,52 +213,66 @@ optimization_program/mode_targets.py.
 
 ## Tuning
 
+* Multiplier ladder: mult_ladder in game_config.py. It is the main volatility control of
+  the game itself: a steeper ladder moves pay from short chains to long ones.
 * Symbol counts on the strips: edit STRIPS in build_reels.py, run it, simulate again.
-* Rules: the "Collapse rules" and "Bonus games" blocks in game_config.py
-  (spins and lives, wild drops, upgrade ladder, starting wilds).
-* After any change: simulate, run `python -m utils.criteria_stats 0_0_gridlines`, and move
-  the hit rates and average wins in game_optimization.py to the new simulated values. The
-  base game average win is computed, so each mode always adds up to its RTP.
-* A different RTP: change self.rtp in game_config.py. Nothing else needs editing.
+* Rules: the "Collapse rules" and "Bonus games" blocks in game_config.py (spins and lives,
+  wild drops, upgrade ladder, starting wilds), and the wild-drop / prime-level weights
+  further down.
+* After any change: simulate, then run
+      python -m utils.criteria_stats 0_0_gridlines --bands 0.1,0.25,0.5,1,2,5,10,25
+  and move the hit rates, average wins and band averages in game_optimization.py to the
+  new simulated values. One criteria per mode is computed ("basegame" for paid spins,
+  "freegame" for buys), so each mode always adds up to its RTP.
+* A different RTP: change self.rtp in game_config.py, then re-check the computed criteria.
 
 
 ## Results of the committed configuration
 
 100,000 simulated rounds per mode, natural weights. Values are read from the published
-lookup tables (library/publish_files/lookUpTable_<mode>_0.csv).
+lookup tables (library/publish_files/lookUpTable_<mode>_0.csv). Payout bands are in
+multiples of the COST of the mode.
 
-    mode       cost   RTP      any win    win > cost   max win            volatility
-    base       1x     93.30%   1 in 2.70  1 in 12.31   1 in 3,333,333     17.18
-    wildspin   5x     93.30%   1 in 1.21  1 in 5.22    1 in 666,667       5.58
-    primespin  20x    93.30%   1 in 1.01  1 in 2.85    1 in 166,667       2.15
-    refine     100x   93.30%   always     1 in 2.78    1 in 12,500        1.05
-    surge      150x   93.30%   always     1 in 3.08    1 in 16,667        1.09
-    survival   300x   93.30%   always     1 in 5.40    1 in 1,075         2.60
+    mode       cost   RTP      pays 0   below 0.1x  0.1x - 2x  above 2x  above 10x  median   volatility
+    base       1x     93.30%   63.1%     -          31.9%      5.0%      1.50%      0        25.8
+    wildspin   5x     93.30%   17.6%    13.2%       64.0%      5.1%      0.94%      0.24x    10.5
+    primespin  20x    93.30%    1.5%    18.0%       74.9%      5.7%      0.68%      0.45x     5.0
+    refine     100x   93.30%    -       21.9%       68.8%      9.3%      1.52%      0.28x     2.5
+    surge      150x   93.30%    -       23.9%       70.0%      6.1%      1.62%      0.25x     3.3
+    survival   200x   93.30%    -       24.0%       70.0%      6.0%      1.64%      0.25x     3.3
 
-Volatility is the standard deviation of the payout divided by the cost of the mode. The max
-win is 10,000x the base bet (2,500x in the refine buy).
+Volatility is the standard deviation of the payout divided by the cost of the mode. In
+the base game 87% of the winning spins pay between 0.1x and 2x.
 
-Bonus games from paid spins (1 in N spins) and their average payout in base bets:
+    mode       win above cost   max win (10,000x)
+    base       1 in 12.5        1 in 3,333,333
+    wildspin   1 in 7.1         1 in 666,667
+    primespin  1 in 5.0         1 in 166,667
+    refine     1 in 4.7         1 in 5,000
+    surge      1 in 5.5         1 in 4,444
+    survival   1 in 5.5         1 in 2,500
 
-    mode       refine   surge     survival   any bonus
-    base       550      1,500     5,500      375
-    wildspin   240      650       2,400      163
-    primespin  150      420       1,500      103
-    avg pay    130x     141-147x  262-279x
+Bonus games from paid spins (1 in N spins) and their average payout in base bets (rounds
+that reach the max win not included):
 
-The averages exclude rounds that reach the max win. The buys always give the 3-scatter
-bonus and average 93x (Refine), 140x (Surge) and 280x (Survival) with max-win rounds
-included. Refine pays more from a paid spin because 4 and 5 scatters award longer bonuses.
+    mode       refine   surge    survival   any bonus
+    base       1,000    2,800    3,000      592
+    wildspin   250      600      700        141
+    primespin  80       160      150        39
+    avg pay    169-173x 213-221x 211-219x
 
-Where the RTP of the base mode comes from: spins without a bonus 54.9%, Refine 23.6%,
-Surge 9.4%, Survival 5.1%, max-win rounds 0.3%.
+A triggered bonus pays more on average than a bought one because 4 and 5 scatters award
+longer bonuses; the buys always give the 3-scatter bonus.
+
+Where the RTP of the base mode comes from: spins without a bonus 60.9%, Refine 17.1%,
+Surge 7.6%, Survival 7.3%, max-win rounds 0.3%.
 
 Checks run on this configuration:
 * utils/rgs_verification (format checks): passed for all six modes.
 * verify_books.py: all 600,000 books replayed from their events; every win, collapse,
-  multiplier step, wild drop, upgrade, life and payout matches the rules and the lookup table.
-* pytest tests/: 42 passed.
+  ladder step, wild drop, upgrade, life and payout matches the rules and the lookup table.
+* pytest tests/: 46 passed.
 * Risk limits in game_optimization.py: met by every mode with no change to the weights.
 
-Book sizes (100,000 rounds, compressed): base 39 MB, wildspin 47 MB, primespin 58 MB,
-refine 143 MB, surge 192 MB, survival 249 MB. Fewer simulations give smaller files.
+Book sizes (100,000 rounds, compressed): base 32 MB, wildspin 38 MB, primespin 48 MB,
+refine 116 MB, surge 89 MB, survival 214 MB. Fewer simulations give smaller files.

@@ -1,6 +1,7 @@
 """Overrides of universal state.py functions for the grid-line pays game."""
 
 from .game_executables import GameExecutables
+from src.calculations.statistics import get_random_outcome
 
 
 class GameStateOverride(GameExecutables):
@@ -14,10 +15,13 @@ class GameStateOverride(GameExecutables):
         super().reset_book()
         # Reset parameters relevant to local game only
         self.bonus_type = None
+        self.mult_step = 0
         self.lives = 0
         self.sticky_wilds = []
-        # Prime spin starts with symbols already upgraded; every other mode starts at level 0.
-        self.refine_level = self.get_current_distribution_conditions().get("refine_level", 0)
+        # Prime spin starts with a random number of symbols already upgraded; every other
+        # mode starts at level 0.
+        level = self.get_current_distribution_conditions().get("refine_level", 0)
+        self.refine_level = get_random_outcome(level) if isinstance(level, dict) else level
 
     def reset_fs_spin(self):
         super().reset_fs_spin()

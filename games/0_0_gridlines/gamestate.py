@@ -45,7 +45,7 @@ class GameState(GameStateOverride):
         raises the multiplier the following spins start on."""
         while self.fs < self.tot_fs and not self.wincap_triggered:
             self.update_freespin()
-            self.set_multiplier(1 + self.refine_level * self.config.refine_mult_per_level)
+            self.set_mult_step(self.refine_level * self.config.refine_steps_per_level)
             self.draw_bonus_board()
 
             self.play_collapse_sequence()

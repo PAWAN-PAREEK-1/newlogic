@@ -4,6 +4,7 @@ from .game_calculations import GameCalculations
 from .game_events import (
     bonus_trigger_event,
     collapse_board_event,
+    prime_symbols_event,
     sticky_wilds_event,
     wild_drop_event,
 )
@@ -26,8 +27,13 @@ class GameExecutables(GameCalculations):
     # --------------------------------------------------------------------------------------
 
     def draw_spin_board(self) -> None:
-        """Draw and reveal the board of a paid spin, then apply the mode's wild drop."""
+        """Draw and reveal the board of a paid spin, then apply the mode's wild drop.
+
+        Prime spin: the symbols removed for this spin are announced before the reveal.
+        """
         self.draw_board(emit_event=False)
+        if self.refine_level > 0:
+            prime_symbols_event(self)
         reveal_event(self)
         wild_drop = self.get_current_distribution_conditions().get("wild_drop")
         if wild_drop is not None:
@@ -88,26 +94,21 @@ class GameExecutables(GameCalculations):
         collapse_board_event(self)
 
     def step_multiplier(self) -> None:
-        """Raise the win multiplier after a collapse: one step for every winning run.
+        """Move up the multiplier ladder after a collapse: one step for every winning run."""
+        self.set_mult_step(self.mult_step + self.config.mult_step_per_run * len(self.win_data["wins"]))
 
-        Surge bonus only: every full line (a run across the whole row or column) then
-        doubles the multiplier.
-        """
-        self.global_multiplier += self.config.mult_step_per_run * len(self.win_data["wins"])
-        if self.bonus_type == "surge" and self.config.surge_full_line_double:
-            full_lines = sum(1 for win in self.win_data["wins"] if win["kind"] >= self.config.num_reels)
-            self.global_multiplier *= 2**full_lines
-        update_global_mult_event(self)
-
-    def set_multiplier(self, value: int) -> None:
-        """Set the win multiplier, transmitting the change."""
+    def set_mult_step(self, step: int) -> None:
+        """Set the position on the multiplier ladder, transmitting the multiplier if it changed."""
+        ladder = self.config.bonus_mult_ladder.get(self.bonus_type, self.config.mult_ladder)
+        self.mult_step = step
+        value = ladder[min(step, len(ladder) - 1)]
         if self.global_multiplier != value:
             self.global_multiplier = value
             update_global_mult_event(self)
 
     def reset_multiplier(self) -> None:
-        """Set the win multiplier back to 1x."""
-        self.set_multiplier(1)
+        """Back to the first step of the ladder (1x)."""
+        self.set_mult_step(0)
 
     def play_collapse_sequence(self) -> None:
         """Evaluate, pay and collapse until the board has no more runs."""

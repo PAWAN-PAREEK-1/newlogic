@@ -15,44 +15,120 @@ from optimization_program.optimization_config import (
 #   av_win  - average payout of those rounds, in multiples of the BASE bet
 # and the criteria's RTP is av_win / (hr * cost).
 #
-# The average wins and the base-game hit rates below are what the game produces on its own
-# (python -m utils.criteria_stats 0_0_gridlines, 100,000 books per mode), so the published
-# weights stay close to the simulation. Rounds that reach the max win are counted in "wincap",
-# not in the average of the bonus they came from. How often each bonus game triggers is a
-# design choice.
-# The base-game ("basegame") average win is the one value left free: it is whatever brings
-# the mode to its RTP, and should stay within a few percent of the simulated average.
+# All values below come from python -m utils.criteria_stats 0_0_gridlines (100,000 books per
+# mode), so inside a criteria the published weights stay close to the simulation.
 # --------------------------------------------------------------------------------------------
 
+# Paid spins (base, wildspin, primespin)
+# ---------------------------------------
 # Bonus games triggered from a paid spin: 1 in `hr` paid spins, average payout `av_win`.
+# av_win is the simulated average (rounds that reach the max win are counted in "wincap").
+# How often each bonus triggers is the design choice; together with the simulated base game
+# they have to add up to the RTP.
 SPIN_MODE_BONUSES = {
     "base": {
-        "refine": {"hr": 550.0, "av_win": 130.0},
-        "surge": {"hr": 1500.0, "av_win": 141.5},
-        "survival": {"hr": 5500.0, "av_win": 279.0},
+        "refine": {"hr": 1000.0, "av_win": 171.3},
+        "surge": {"hr": 2800.0, "av_win": 213.2},
+        "survival": {"hr": 3000.0, "av_win": 219.4},
     },
     "wildspin": {
-        "refine": {"hr": 240.0, "av_win": 132.0},
-        "surge": {"hr": 650.0, "av_win": 147.0},
-        "survival": {"hr": 2400.0, "av_win": 262.0},
+        "refine": {"hr": 250.0, "av_win": 169.1},
+        "surge": {"hr": 600.0, "av_win": 218.0},
+        "survival": {"hr": 700.0, "av_win": 212.9},
     },
     "primespin": {
-        "refine": {"hr": 150.0, "av_win": 133.0},
-        "surge": {"hr": 420.0, "av_win": 147.0},
-        "survival": {"hr": 1500.0, "av_win": 278.0},
+        "refine": {"hr": 80.0, "av_win": 172.7},
+        "surge": {"hr": 160.0, "av_win": 220.9},
+        "survival": {"hr": 150.0, "av_win": 210.6},
     },
 }
-# Winning paid spins without a bonus: 1 in `hr` paid spins (the simulated hit rate).
-SPIN_MODE_HIT_RATE = {"base": 2.72, "wildspin": 1.224, "primespin": 1.02}
-# RTP given to rounds that pay the mode's max win. The max win then lands
+# Winning base-game spins without a bonus: 1 in `hr` spins (the simulated hit rate).
+BASE_HIT_RATE = 2.72
+
+# Feature spins: the spins that win without a bonus are set band by band, like the bonus
+# buys below. A band is a payout range (from, to] in multiples of the COST of the spin.
+#   share   - share of ALL spins of the mode that pay inside the band
+#   average - average payout inside the band, in multiples of the cost (the simulated value)
+# The band (0.5, 1] is the "basegame" criteria: it has its share here and takes the RTP
+# that everything else leaves over. Spins not covered by any share pay nothing.
+SPIN_BANDS = {
+    "wildspin": [
+        {"name": "x0.1", "range": (0.0, 0.1), "share": 0.15, "average": 0.0456},
+        {"name": "x0.25", "range": (0.1, 0.25), "share": 0.18, "average": 0.1715},
+        {"name": "x0.5", "range": (0.25, 0.5), "share": 0.16, "average": 0.3606},
+        {"name": "x2", "range": (1.0, 2.0), "share": 0.09, "average": 1.4391},
+        {"name": "x5", "range": (2.0, 5.0), "share": 0.03, "average": 3.2051},
+        {"name": "x10", "range": (5.0, 10.0), "share": 0.01, "average": 6.8370},
+        {"name": "x25", "range": (10.0, 25.0), "share": 0.005, "average": 14.7376},
+        {"name": "xtop", "range": (25.0, None), "share": 0.0015, "average": 41.9731},
+    ],
+    "primespin": [
+        {"name": "x0.1", "range": (0.0, 0.1), "share": 0.18, "average": 0.0316},
+        {"name": "x0.25", "range": (0.1, 0.25), "share": 0.17, "average": 0.1680},
+        {"name": "x0.5", "range": (0.25, 0.5), "share": 0.15, "average": 0.3654},
+        {"name": "x2", "range": (1.0, 2.0), "share": 0.14, "average": 1.4306},
+        {"name": "x5", "range": (2.0, 5.0), "share": 0.035, "average": 3.0398},
+        {"name": "x10", "range": (5.0, 10.0), "share": 0.008, "average": 6.5975},
+        {"name": "xtop", "range": (10.0, None), "share": 0.002, "average": 14.48},
+    ],
+}
+SPIN_BASEGAME_SHARE = {"wildspin": 0.19, "primespin": 0.275}
+
+# RTP given to rounds that pay the max win. The max win then lands
 # 1 in max_win / (rtp x cost) rounds.
 WINCAP_RTP = {
     "base": 0.003,
     "wildspin": 0.003,
     "primespin": 0.003,
-    "refine": 0.002,
-    "surge": 0.004,
-    "survival": 0.031,
+    "refine": 0.02,
+    "surge": 0.015,
+    "survival": 0.02,
+}
+
+# Bonus buys (refine, surge, survival)
+# ------------------------------------
+# The payout distribution of a buy is set band by band. A band is a payout range in multiples
+# of the buy's COST: (from, to]. For each band:
+#   share   - share of all rounds that pay inside the band
+#   average - average payout inside the band, in multiples of the cost. Use the simulated
+#             value (python -m utils.criteria_stats 0_0_gridlines --bands 0.1,0.25,0.5,1,2,5,10,25)
+# The band (0.5, 1] is not listed: it is the "freegame" criteria, which takes the share and
+# the RTP that the listed bands and the max win leave over. After a change, check in the
+# optimizer print-out that its target average is still between 0.5 and 1.
+#
+# The shares are what make the buys volatile: about half of the rounds pay less than a
+# quarter of the cost, about 70% pay between 0.1x and 2x, the 2x-10x middle is kept thin, and
+# about 1.6% of the rounds pay more than 10x the cost.
+BUY_BANDS = {
+    "refine": [
+        {"name": "x0.1", "range": (0.0, 0.1), "share": 0.22, "average": 0.0274},
+        {"name": "x0.25", "range": (0.1, 0.25), "share": 0.25, "average": 0.1667},
+        {"name": "x0.5", "range": (0.25, 0.5), "share": 0.19, "average": 0.3639},
+        {"name": "x2", "range": (1.0, 2.0), "share": 0.12, "average": 1.4446},
+        {"name": "x5", "range": (2.0, 5.0), "share": 0.052, "average": 3.0648},
+        {"name": "x10", "range": (5.0, 10.0), "share": 0.026, "average": 6.5701},
+        {"name": "xtop", "range": (10.0, None), "share": 0.015, "average": 13.41},
+    ],
+    "surge": [
+        {"name": "x0.1", "range": (0.0, 0.1), "share": 0.24, "average": 0.0350},
+        {"name": "x0.25", "range": (0.1, 0.25), "share": 0.26, "average": 0.1596},
+        {"name": "x0.5", "range": (0.25, 0.5), "share": 0.20, "average": 0.3565},
+        {"name": "x2", "range": (1.0, 2.0), "share": 0.12, "average": 1.4127},
+        {"name": "x5", "range": (2.0, 5.0), "share": 0.0325, "average": 3.1835},
+        {"name": "x10", "range": (5.0, 10.0), "share": 0.012, "average": 7.1809},
+        {"name": "x25", "range": (10.0, 25.0), "share": 0.010, "average": 15.5335},
+        {"name": "xtop", "range": (25.0, None), "share": 0.006, "average": 33.2678},
+    ],
+    "survival": [
+        {"name": "x0.1", "range": (0.0, 0.1), "share": 0.24, "average": 0.0267},
+        {"name": "x0.25", "range": (0.1, 0.25), "share": 0.26, "average": 0.1665},
+        {"name": "x0.5", "range": (0.25, 0.5), "share": 0.20, "average": 0.3589},
+        {"name": "x2", "range": (1.0, 2.0), "share": 0.12, "average": 1.4148},
+        {"name": "x5", "range": (2.0, 5.0), "share": 0.032, "average": 3.1429},
+        {"name": "x10", "range": (5.0, 10.0), "share": 0.012, "average": 6.9584},
+        {"name": "x25", "range": (10.0, 25.0), "share": 0.010, "average": 15.2514},
+        {"name": "xtop", "range": (25.0, None), "share": 0.006, "average": 33.3109},
+    ],
 }
 
 # --------------------------------------------------------------------------------------------
@@ -87,20 +163,45 @@ def spin_mode_conditions(mode: str, cost: float, rtp: float, wincap: float) -> d
             rtp=bonus_rtp, hr=target["hr"], search_conditions={"bonus": bonus}
         ).return_dict()
         used_rtp += bonus_rtp
-    conditions["basegame"] = ConstructConditions(
-        hr=SPIN_MODE_HIT_RATE[mode], rtp=round(rtp - used_rtp, 5)
-    ).return_dict()
+    basegame_hr = BASE_HIT_RATE
+    if mode in SPIN_BANDS:
+        used_rtp += add_bands(conditions, SPIN_BANDS[mode], cost, wincap)[0]
+        basegame_hr = round(1.0 / SPIN_BASEGAME_SHARE[mode], 10)
+    conditions["basegame"] = ConstructConditions(hr=basegame_hr, rtp=round(rtp - used_rtp, 5)).return_dict()
     return conditions
 
 
+def add_bands(conditions: dict, bands: list, cost: float, wincap: float) -> tuple:
+    """Add one payout-range criteria per band. Returns (RTP used, share of rounds used)."""
+    used_rtp, used_share = 0.0, 0.0
+    for band in bands:
+        low, high = band["range"]
+        # The top band ends just below the max win, which has its own criteria.
+        high_win = round(high * cost, 2) if high is not None else wincap - 0.05
+        band_rtp = round(band["share"] * band["average"], 5)
+        conditions[band["name"]] = ConstructConditions(
+            rtp=band_rtp,
+            hr=round(1.0 / band["share"], 10),
+            search_conditions=(round(low * cost, 2), high_win),
+        ).return_dict()
+        used_rtp += band_rtp
+        used_share += band["share"]
+    return used_rtp, used_share
+
+
 def bonus_mode_conditions(mode: str, cost: float, rtp: float, wincap: float) -> dict:
-    """Criteria targets of a bonus buy: every round is a bonus, a few of them the max win."""
-    wincap_prob = WINCAP_RTP[mode] * cost / wincap
-    freegame_rtp = round(rtp - WINCAP_RTP[mode], 5)
-    return {
+    """Criteria targets of a bonus buy: the max win, the payout bands, then what is left."""
+    conditions = {
         "wincap": ConstructConditions(rtp=WINCAP_RTP[mode], av_win=wincap, search_conditions=wincap).return_dict(),
-        "freegame": ConstructConditions(rtp=freegame_rtp, hr=round(1.0 / (1.0 - wincap_prob), 10)).return_dict(),
     }
+    band_rtp, band_share = add_bands(conditions, BUY_BANDS[mode], cost, wincap)
+    used_rtp = WINCAP_RTP[mode] + band_rtp
+    used_share = WINCAP_RTP[mode] * cost / wincap + band_share
+    # Everything not taken above: the band (0.5, 1] x cost.
+    conditions["freegame"] = ConstructConditions(
+        rtp=round(rtp - used_rtp, 5), hr=round(1.0 / (1.0 - used_share), 10)
+    ).return_dict()
+    return conditions
 
 
 class OptimizationSetup:
@@ -157,16 +258,7 @@ class OptimizationSetup:
             cost = costs[mode]
             opt_params[mode] = {
                 "conditions": bonus_mode_conditions(mode, cost, rtps[mode], wincaps[mode]),
-                "scaling": ConstructScaling(
-                    [
-                        {
-                            "criteria": "freegame",
-                            "scale_factor": 1.2,
-                            "win_range": (cost, 2 * cost),
-                            "probability": 1.0,
-                        },
-                    ]
-                ).return_dict(),
+                "scaling": ConstructScaling([]).return_dict(),
                 "parameters": ConstructParameters(
                     num_show=5000,
                     num_per_fence=10000,

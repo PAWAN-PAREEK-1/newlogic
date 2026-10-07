@@ -130,20 +130,32 @@ class BookReplay:
         events = book["events"]
         conditions = self.conditions_by_criteria[book["criteria"]]
         check([e["index"] for e in events] == list(range(len(events))), "event indexes are not 0..n-1")
-        check(events[0]["type"] == "reveal", "book does not start with a reveal")
+        check(events[0]["type"] in ("reveal", "primeSymbols"), "book does not start with a reveal")
         check(events[-1]["type"] == "finalWin", "book does not end with finalWin")
 
         self.pos = 0
         self.events = events
         self.mult = 1
+        self.step = 0
+        self.ladder = self.config.mult_ladder
         self.total = 0
         self.capped = False
 
         # ---- paid spin ----------------------------------------------------------------
+        prime_level = conditions.get("refine_level", 0)
+        if prime_level:
+            prime = self.take("primeSymbols")
+            allowed = prime_level if isinstance(prime_level, dict) else {prime_level: 1}
+            check(prime["level"] in allowed, "prime level is not allowed in this mode")
+            prime_level = prime["level"]
+            removed = self.config.refine_order[:prime_level]
+            check(prime["removedSymbols"] == removed, "primeSymbols lists the wrong symbols")
+            check(prime["landAs"] == self.config.refine_into[removed[-1]], "primeSymbols landAs is wrong")
+        else:
+            check(self.peek() != "primeSymbols", "primeSymbols in a mode without it")
         reveal = self.take("reveal")
         check(reveal["gameType"] == self.config.basegame_type, "first reveal is not a base game reveal")
         grid = self.grid_from(reveal)
-        prime_level = conditions.get("refine_level", 0)
         self.check_refined(grid, prime_level)
         if "wild_drop" in conditions:
             drop = self.take("wildDrop")
@@ -202,9 +214,14 @@ class BookReplay:
         else:
             check(self.peek() != "updateGlobalMult", "multiplier event without a change")
 
+    def set_step(self, step: int) -> None:
+        """Move to a step of the multiplier ladder and expect the matching event."""
+        self.step = step
+        self.expect_mult(self.ladder[min(step, len(self.ladder) - 1)])
+
     # ---- one spin: evaluate, pay, collapse --------------------------------------------------
 
-    def play_spin(self, grid: list, surge: bool = False) -> tuple:
+    def play_spin(self, grid: list) -> tuple:
         """Replay the collapse sequence of one spin. Returns (final grid, spin win in cents)."""
         spin_win = 0
         while True:
@@ -247,10 +264,7 @@ class BookReplay:
             for p in event["newWilds"]:
                 check(grid[p["reel"]][p["landingRow"]] == WILD, "landingRow of a new wild is wrong")
 
-            new_mult = self.mult + self.config.mult_step_per_run * len(runs)
-            if surge and self.config.surge_full_line_double:
-                new_mult *= 2 ** sum(1 for _, cells in runs if len(cells) >= self.config.num_reels)
-            self.expect_mult(new_mult)
+            self.set_step(self.step + self.config.mult_step_per_run * len(runs))
         return grid, spin_win
 
     def end_of_spin(self, spin_win: int) -> None:
@@ -268,7 +282,8 @@ class BookReplay:
         check(len(trigger["positions"]) == scatters, "trigger does not list every scatter")
         award = self.config.bonus_awards[bonus][scatters]
         start_total = self.total
-        self.expect_mult(1)  # every bonus starts at 1x
+        self.ladder = self.config.bonus_mult_ladder.get(bonus, self.config.mult_ladder)
+        self.set_step(0)  # every bonus starts at 1x
 
         if bonus == "survival":
             check(trigger["lives"] == award and trigger["totalFs"] == 0, "wrong number of lives awarded")
@@ -290,7 +305,7 @@ class BookReplay:
             update = self.take("updateFreeSpin")
             check(update["amount"] == spin and update["total"] == spins, "free spin counter is wrong")
             if bonus == "refine":
-                self.expect_mult(1 + level * self.config.refine_mult_per_level)
+                self.set_step(level * self.config.refine_steps_per_level)
             reveal = self.take("reveal")
             check(reveal["gameType"] == self.config.freegame_type, "bonus reveal has the wrong game type")
             grid = self.grid_from(reveal)
@@ -309,7 +324,7 @@ class BookReplay:
                     for p in drop["positions"]:
                         check(grid[p["reel"]][p["row"]] != WILD, "wild dropped on a wild")
                         grid[p["reel"]][p["row"]] = WILD
-            grid, spin_win = self.play_spin(grid, surge=(bonus == "surge"))
+            grid, spin_win = self.play_spin(grid)
             self.end_of_spin(spin_win)
             if bonus == "refine" and spin_win > 0 and level < len(self.config.refine_order) and not self.capped:
                 removed = self.config.refine_order[level]
@@ -353,7 +368,7 @@ class BookReplay:
                 lives -= 1
                 lost = self.take("updateLives")
                 check(lost["lives"] == lives and lost["lostLife"], "life was not taken after a losing spin")
-                self.expect_mult(1)
+                self.set_step(0)
             sticky = {(reel, row) for reel, col in enumerate(grid) for row, name in enumerate(col) if name == WILD}
         check(self.peek() != "updateLives", "survival bonus continues after it should have ended")
 
