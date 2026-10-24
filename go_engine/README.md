@@ -26,7 +26,7 @@ game_analytics + rgs_verification (Python)                   <- ANALYZE/VERIFY
 Run the whole pipeline with:
 
 ```bash
-python games/expwilds/run_go.py
+python games/gridlines/run_go.py
 ```
 
 ## Why the output is byte-identical (and why that matters)
@@ -40,6 +40,7 @@ CPython's exact random machinery in [`pyrand/`](pyrand/pyrand.go):
 * `getrandbits`-based rejection sampling for `randrange` / `choice`,
 * `random.choices` cumulative-weight bisection,
 * `random.shuffle`'s Fisher–Yates,
+* `random.sample`'s pool and set selection,
 
 plus CPython's decimal-string rounding (`round(x, 2)`) and `repr()` float
 formatting ([`engine/pyfmt.go`](engine/pyfmt.go)), and `json.dumps` output
@@ -73,7 +74,7 @@ Because both engines produce identical bytes for identical inputs:
 | `engine/force.go` | `write_data.py` (forces) | force-record aggregation |
 | `engine/runner.go` | `run_sims.py`, `write_data.py` | worker pool + file output |
 | `engine/pyjson.go` / `pyfmt.go` | `json.dumps`, `round`, `repr` | CPython formatting |
-| `game/expwilds.go` | `games/expwilds/*.py` | THE GAME (spin/feature logic) |
+| `game/gridlines.go` | `games/gridlines/*.py`, `src/calculations/gridlines.py`, `collapse.py` | THE GAME (grid-line runs, collapse, bonus games) |
 | `main.go` | `run.py` (sim part) | CLI |
 
 ## Running it directly
@@ -84,8 +85,8 @@ Because both engines produce identical bytes for identical inputs:
 cd go_engine
 go build -o bin/engine .
 ./bin/engine \
-  --spec    ../games/expwilds/library/configs/game_spec_go.json \
-  --library ../games/expwilds/library \
+  --spec    ../games/gridlines/library/configs/game_spec_go.json \
+  --library ../games/gridlines/library \
   --modes   base,ante,bonus \
   --sims    100000              # or per-mode: base=200000,bonus=50000
   --workers 0                   # 0 = all cores
@@ -116,7 +117,7 @@ from your workflow in that case).
 
 1. **Export**: copy `games/<game>/export_spec.py` and extend
    `_export_conditions` with any new condition tables your game uses.
-2. **Game logic**: copy `game/expwilds.go` as a starting point. Re-implement
+2. **Game logic**: copy `game/gridlines.go` as a starting point. Re-implement
    your `gamestate.py` flow using the engine primitives
    (`DrawBoard`, `GetLines`, events, `RunFreespinFromBase`, …). Follow the
    original Python file top-to-bottom and keep RNG calls in order.

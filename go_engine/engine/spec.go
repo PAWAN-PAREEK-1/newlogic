@@ -139,6 +139,20 @@ type Conditions struct {
 	// SuperspinResult marks a SUPERSPIN entry criteria: "dead", "normal",
 	// "super" or "hidden" ("" = not a SUPERSPIN round).
 	SuperspinResult string `json:"superspin_result"`
+
+	// Raw is the whole exported conditions object, so a game package can read
+	// condition tables the engine does not know about.
+	Raw json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON decodes the known fields and keeps the raw object in Raw.
+func (c *Conditions) UnmarshalJSON(b []byte) error {
+	type plain Conditions
+	if err := json.Unmarshal(b, (*plain)(c)); err != nil {
+		return err
+	}
+	c.Raw = append(json.RawMessage(nil), b...)
+	return nil
 }
 
 // SwitchConfig is one gametype's Switch rules.
@@ -192,6 +206,8 @@ type Spec struct {
 	SwitchSymbols []string `json:"switch_symbols"`
 	// SwitchWild is the symbol a converted type becomes.
 	SwitchWild string `json:"switch_wild"`
+	// Game holds game-specific config attributes, decoded by the game package.
+	Game json.RawMessage `json:"game"`
 
 	// Derived lookups (built by Load, not part of the JSON).
 	paytableLookup map[payKey]float64
@@ -228,6 +244,11 @@ func Load(path string) (*Spec, error) {
 			return
 		}
 		def := &SymbolDef{Name: name, Flags: map[string]bool{}}
+		for _, e := range s.Paytable {
+			if e.Symbol == name {
+				def.IsPaying = true
+			}
+		}
 		for _, sp := range s.SpecialSymbols {
 			for _, n := range sp.Symbols {
 				if n == name {

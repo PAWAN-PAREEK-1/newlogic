@@ -2,22 +2,28 @@
 
 Standard SDK events used unchanged: reveal, winInfo, updateTumbleWin, setWin, setTotalWin,
 updateGlobalMult, updateFreeSpin, freeSpinEnd, wincap, finalWin.
-updateGlobalMult is sent only when the multiplier changes.
+updateGlobalMult is sent only when the paid-spin multiplier changes; a bonus sends
+updateLineMult for its row and column multipliers instead.
 
-All positions are board positions {"reel": 0-4, "row": 0-4}, row 0 at the top. The game has
-no padding rows, so nothing is offset.
+Positions are sent the way the SDK events send them (win_info_event and fs_trigger_event
+with their default include_padding_index), so every game reads them the same way:
+{"reel": 0-4, "row": 1-5}, where row = board row + 1 and row 1 is the top of the grid.
 """
-
-from copy import deepcopy
 
 from src.events.event_constants import EventConstants
 
 WILD_DROP = "wildDrop"
 COLLAPSE_BOARD = "collapseBoard"
-STICKY_WILDS = "stickyWilds"
 REFINE_SYMBOL = "refineSymbol"
 PRIME_SYMBOLS = "primeSymbols"
-UPDATE_LIVES = "updateLives"
+UPDATE_LINE_MULT = "updateLineMult"
+
+ROW_OFFSET = 1  # event row = board row + ROW_OFFSET
+
+
+def client_positions(positions: list) -> list:
+    """Board positions as they are sent in events."""
+    return [{"reel": p["reel"], "row": p["row"] + ROW_OFFSET} for p in positions]
 
 
 def wild_drop_event(gamestate, positions: list) -> None:
@@ -25,17 +31,7 @@ def wild_drop_event(gamestate, positions: list) -> None:
     event = {
         "index": len(gamestate.book.events),
         "type": WILD_DROP,
-        "positions": deepcopy(positions),
-    }
-    gamestate.book.add_event(event)
-
-
-def sticky_wilds_event(gamestate, positions: list) -> None:
-    """Survival bonus: wilds carried over from the previous spin (sent before the reveal)."""
-    event = {
-        "index": len(gamestate.book.events),
-        "type": STICKY_WILDS,
-        "positions": deepcopy(positions),
+        "positions": client_positions(positions),
     }
     gamestate.book.add_event(event)
 
@@ -53,29 +49,26 @@ def collapse_board_event(gamestate) -> None:
     event = {
         "index": len(gamestate.book.events),
         "type": COLLAPSE_BOARD,
-        "explodingSymbols": deepcopy(gamestate.exploded_positions),
+        "explodingSymbols": client_positions(gamestate.exploded_positions),
         "newWilds": [
-            {"reel": s["reel"], "row": s["row"], "landingRow": s["landingRow"]} for s in gamestate.spawned_symbols
+            {"reel": s["reel"], "row": s["row"] + ROW_OFFSET, "landingRow": s["landingRow"] + ROW_OFFSET}
+            for s in gamestate.spawned_symbols
         ],
     }
     gamestate.book.add_event(event)
 
 
 def bonus_trigger_event(gamestate) -> None:
-    """Scatters trigger a bonus game. Sent in place of the SDK freeSpinTrigger event.
+    """Scatters trigger a bonus game. The SDK freeSpinTrigger event plus bonusType.
 
-    bonusType: "surge", "refine" or "survival".
-    totalFs: free spins awarded (surge, refine). 0 for survival, which is played on lives.
-    lives: lives awarded (survival). 0 for the other bonus games.
+    bonusType: the bonus game the number of scatters triggered ("refine", "surge" or "fusion").
     """
-    is_survival = gamestate.bonus_type == "survival"
     event = {
         "index": len(gamestate.book.events),
         "type": EventConstants.FREESPINTRIGGER.value,
+        "totalFs": int(gamestate.tot_fs),
+        "positions": client_positions(gamestate.special_syms_on_board["scatter"]),
         "bonusType": gamestate.bonus_type,
-        "totalFs": 0 if is_survival else int(gamestate.tot_fs),
-        "lives": int(gamestate.lives) if is_survival else 0,
-        "positions": deepcopy(gamestate.special_syms_on_board["scatter"]),
     }
     gamestate.book.add_event(event)
 
@@ -97,7 +90,7 @@ def prime_symbols_event(gamestate) -> None:
 
 
 def refine_symbol_event(gamestate, removed: str, into: str) -> None:
-    """Refine bonus: a symbol is upgraded for the rest of the bonus.
+    """Bonus with symbol upgrades: a symbol is upgraded for the rest of the bonus.
 
     From the next spin on, every `removed` symbol lands as `into`.
     """
@@ -112,13 +105,17 @@ def refine_symbol_event(gamestate, removed: str, into: str) -> None:
     gamestate.book.add_event(event)
 
 
-def update_lives_event(gamestate, lost_life: bool = False) -> None:
-    """Survival bonus: lives left and the number of the spin about to be played."""
+def update_line_mult_event(gamestate) -> None:
+    """Bonus games: the multiplier of every row and column.
+
+    Sent when a bonus starts (every line at 1) and after a collapse that changed a value.
+    rows[i] is the multiplier of board row i (top first) and columns[i] of reel i: the same
+    index as "lineIndex" in winInfo meta for direction "row" / "column".
+    """
     event = {
         "index": len(gamestate.book.events),
-        "type": UPDATE_LIVES,
-        "lives": int(gamestate.lives),
-        "spin": int(gamestate.fs),
-        "lostLife": bool(lost_life),
+        "type": UPDATE_LINE_MULT,
+        "rows": list(gamestate.line_mults["row"]),
+        "columns": list(gamestate.line_mults["column"]),
     }
     gamestate.book.add_event(event)

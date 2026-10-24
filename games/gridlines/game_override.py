@@ -1,6 +1,7 @@
 """Overrides of universal state.py functions for the grid-line pays game."""
 
 from .game_executables import GameExecutables
+from .game_events import update_line_mult_event
 from src.calculations.statistics import get_random_outcome
 
 
@@ -16,8 +17,7 @@ class GameStateOverride(GameExecutables):
         # Reset parameters relevant to local game only
         self.bonus_type = None
         self.mult_step = 0
-        self.lives = 0
-        self.sticky_wilds = []
+        self.reset_line_multipliers()
         # Prime spin starts with a random number of symbols already upgraded; every other
         # mode starts at level 0.
         level = self.get_current_distribution_conditions().get("refine_level", 0)
@@ -25,10 +25,12 @@ class GameStateOverride(GameExecutables):
 
     def reset_fs_spin(self):
         super().reset_fs_spin()
-        # Every bonus game starts from the same clean state, whichever mode triggered it.
+        # Every bonus game starts from the same clean state, whichever mode triggered it: the
+        # paid-spin multiplier back to 1x (it is not used in a bonus) and every line at 1x.
         self.refine_level = 0
-        self.sticky_wilds = []
         self.reset_multiplier()
+        self.reset_line_multipliers()
+        update_line_mult_event(self)
 
     def assign_special_sym_function(self):
         self.special_symbol_functions = {}

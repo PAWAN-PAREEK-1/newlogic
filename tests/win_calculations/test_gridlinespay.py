@@ -132,6 +132,29 @@ def test_full_board_pays_every_row_and_column(gamestate):
     assert all(win["meta"]["globalMult"] == 3 for win in windata["wins"])
 
 
+def test_line_multipliers_apply_to_their_own_row_and_column(gamestate):
+    "A run pays at the multiplier of the row or column it is in."
+    set_board(
+        gamestate,
+        [
+            "H1 H1 H1 S  S",
+            "L1 S  S  S  S",
+            "L1 S  S  S  S",
+            "L1 S  S  S  S",
+            "S  S  S  S  S",
+        ],
+    )
+    line_multipliers = {"row": [4, 1, 1, 1, 1], "column": [7, 1, 1, 1, 1]}
+    windata = GridLines.get_gridline_wins(
+        gamestate.config, gamestate.board, global_multiplier=2, line_multipliers=line_multipliers
+    )
+    wins = {win["meta"]["direction"]: win for win in windata["wins"]}
+    assert wins["row"]["win"] == gamestate.config.paytable[(3, "H1")] * 2 * 4
+    assert wins["column"]["win"] == gamestate.config.paytable[(3, "L1")] * 2 * 7
+    assert wins["row"]["meta"]["lineMultiplier"] == 4 and wins["row"]["meta"]["multiplier"] == 8
+    assert wins["column"]["meta"]["lineMultiplier"] == 7 and wins["column"]["meta"]["globalMult"] == 2
+
+
 def test_wild_extends_run(gamestate):
     "Wilds continue the run of the symbol next to them."
     set_board(

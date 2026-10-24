@@ -1,10 +1,10 @@
-"""Play rounds of every bet mode of 0_0_gridlines and replay them with the independent checker."""
+"""Play rounds of every bet mode of gridlines and replay them with the independent checker."""
 
 import importlib
 
 import pytest
 
-GAME = "games.0_0_gridlines"
+GAME = "games.gridlines"
 config_module = importlib.import_module(f"{GAME}.game_config")
 gamestate_module = importlib.import_module(f"{GAME}.gamestate")
 verify_books = importlib.import_module(f"{GAME}.verify_books")
@@ -15,7 +15,7 @@ CASES = [
     ("base", "0", 50),
     ("base", "refine", 15),
     ("base", "surge", 15),
-    ("base", "survival", 15),
+    ("base", "fusion", 10),
     ("base", "wincap", 2),
     ("wildspin", "basegame", 100),
     ("wildspin", "surge", 10),
@@ -24,9 +24,13 @@ CASES = [
     ("refine", "freegame", 30),
     ("refine", "wincap", 2),
     ("surge", "freegame", 30),
-    ("surge", "wincap", 2),
-    ("survival", "freegame", 30),
-    ("survival", "wincap", 2),
+    ("surge", "wincap", 1),
+    ("mystery", "0", 10),
+    ("mystery", "basegame", 30),
+    ("mystery", "refine", 10),
+    ("mystery", "surge", 10),
+    ("mystery", "fusion", 10),
+    ("mystery", "wincap", 1),
 ]
 
 
@@ -40,11 +44,15 @@ def game():
 def test_rounds_follow_the_rules(game, mode, criteria, rounds):
     config, gamestate = game
     bet_mode = next(bm for bm in config.bet_modes if bm.get_name() == mode)
-    distribution = next(d for d in bet_mode.get_distributions() if d.get_criteria() == criteria)
+    distribution = next(
+        d for d in bet_mode.get_distributions() if d.get_criteria() == criteria
+    )
     conditions = {d.get_criteria(): d._conditions for d in bet_mode.get_distributions()}
     replay = verify_books.BookReplay(config, mode, conditions, bet_mode.get_wincap())
 
-    config.wincap = bet_mode.get_wincap()  # create_books sets the mode's max win the same way
+    config.wincap = (
+        bet_mode.get_wincap()
+    )  # create_books sets the mode's max win the same way
     gamestate.betmode = mode
     gamestate.criteria = criteria
     for sim in range(rounds):
@@ -66,12 +74,12 @@ def test_rounds_are_reproducible(game):
     config, gamestate = game
     config.wincap = config.bet_modes[0].get_wincap()
     gamestate.betmode = "base"
-    gamestate.criteria = "survival"
+    gamestate.criteria = "fusion"
     gamestate.run_spin(7)
     first = gamestate.book.to_json()
     gamestate.criteria = "basegame"
     for sim in range(20):
         gamestate.run_spin(sim)
-    gamestate.criteria = "survival"
+    gamestate.criteria = "fusion"
     gamestate.run_spin(7)
     assert gamestate.book.to_json() == first

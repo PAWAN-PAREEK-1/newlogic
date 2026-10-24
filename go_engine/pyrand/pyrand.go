@@ -26,10 +26,13 @@
 //   - ChoiceIndex(n)            -> index used by random.choice(seq)
 //   - WeightedChoiceIndex(w)    -> index used by random.choices(pop, weights)[0]
 //   - Shuffle(n, swap)          -> random.shuffle(x)
+//   - Sample(n, k)              -> indices chosen by random.sample(seq, k)
 //
 // Every function documents the CPython source it mirrors.  Do NOT "optimise"
 // the math here - changing call order or float arithmetic breaks parity.
 package pyrand
+
+import "math"
 
 const (
 	n         = 624        // MT19937 state size (words)
@@ -240,6 +243,45 @@ func (r *Rand) Shuffle(length int, swap func(i, j int)) {
 		j := r.RandBelow(i + 1)
 		swap(i, j)
 	}
+}
+
+// Sample replicates random.sample(population, k) for a population of length
+// n, returning the chosen INDICES (result[i] indexes the population):
+//
+//	setsize = 21; if k > 5: setsize += 4 ** ceil(log(k * 3, 4))
+//	n <= setsize: pool selection (swap the last unselected item into the gap)
+//	otherwise:    rejection sampling against a set of already chosen indices
+func (r *Rand) Sample(nv, k int) []int {
+	if k < 0 || k > nv {
+		panic("pyrand: Sample larger than population or is negative")
+	}
+	result := make([]int, k)
+	setsize := 21
+	if k > 5 {
+		setsize += int(math.Pow(4, math.Ceil(math.Log(float64(k*3))/math.Log(4))))
+	}
+	if nv <= setsize {
+		pool := make([]int, nv)
+		for i := range pool {
+			pool[i] = i
+		}
+		for i := 0; i < k; i++ {
+			j := r.RandBelow(nv - i)
+			result[i] = pool[j]
+			pool[j] = pool[nv-i-1]
+		}
+		return result
+	}
+	selected := make(map[int]bool, k)
+	for i := 0; i < k; i++ {
+		j := r.RandBelow(nv)
+		for selected[j] {
+			j = r.RandBelow(nv)
+		}
+		selected[j] = true
+		result[i] = j
+	}
+	return result
 }
 
 // bitLength mirrors int.bit_length() in Python.

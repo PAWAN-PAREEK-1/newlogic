@@ -165,6 +165,10 @@ def assign_books(fences: list[Fence], ids: np.ndarray, cents: np.ndarray, forces
                 known = pos_of_id.reindex(np.unique(book_ids)).dropna().to_numpy(dtype=np.int64)
                 members[known] = True
             members &= remaining
+            if fence.win_range_start > -1.0 and fence.win_range_end > fence.win_range_start:
+                # search fence with a payout range: only the matched books inside the range
+                # (Go optimizer only - the Rust optimizer ignores the range of a search fence)
+                members &= (wins > fence.win_range_start) & (wins <= fence.win_range_end)
 
         fence.book_idx = np.flatnonzero(members)
         remaining &= ~members

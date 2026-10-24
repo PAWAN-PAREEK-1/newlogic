@@ -165,10 +165,14 @@ class GridLines:
         runs: List[dict],
         global_multiplier: int = 1,
         mark_explode: bool = True,
+        line_multipliers: Dict[str, List[int]] = None,
     ) -> dict:
         """Price every run from the paytable and flag winning symbols with `explode`.
 
         Runs whose (kind, symbol) is not in the paytable are ignored.
+
+        line_multipliers: {"row": [one per row], "column": [one per reel]} - a run is also
+        multiplied by the multiplier of the row or column it is in.
         """
         return_data = {"totalWin": 0, "wins": []}
         for run in runs:
@@ -176,7 +180,9 @@ class GridLines:
             if key not in config.paytable:
                 continue
             base_win = config.paytable[key]
-            win = round(base_win * global_multiplier, 2)
+            line_multiplier = line_multipliers[run["direction"]][run["index"]] if line_multipliers else 1
+            multiplier = global_multiplier * line_multiplier
+            win = round(base_win * multiplier, 2)
             centre = GridLines.get_centre_position(run["positions"])
             return_data["wins"].append(
                 {
@@ -184,11 +190,14 @@ class GridLines:
                     "kind": run["kind"],
                     "win": win,
                     "positions": run["positions"],
+                    # Same keys as lines.py, then the two a run needs: its direction and centre.
                     "meta": {
-                        "direction": run["direction"],
                         "lineIndex": run["index"],
-                        "globalMult": int(global_multiplier),
+                        "multiplier": int(multiplier),
                         "winWithoutMult": base_win,
+                        "globalMult": int(global_multiplier),
+                        "lineMultiplier": int(line_multiplier),
+                        "direction": run["direction"],
                         "overlay": centre,
                     },
                 }
@@ -210,11 +219,17 @@ class GridLines:
         wild_key: str = "wild",
         wild_sym: str = "W",
         mark_explode: bool = True,
+        line_multipliers: Dict[str, List[int]] = None,
     ) -> dict:
         """Event-ready win information for the current board."""
         runs = GridLines.find_runs(board, min_run=min_run, wild_key=wild_key, wild_sym=wild_sym)
         return GridLines.evaluate_runs(
-            config, board, runs, global_multiplier=global_multiplier, mark_explode=mark_explode
+            config,
+            board,
+            runs,
+            global_multiplier=global_multiplier,
+            mark_explode=mark_explode,
+            line_multipliers=line_multipliers,
         )
 
     @staticmethod

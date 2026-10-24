@@ -13,6 +13,9 @@ import "sort"
 // any game-registered special functions (these may consume RNG - e.g. the
 // expwilds wild-multiplier assignment during free games).
 func (s *State) CreateSymbol(name string) *Symbol {
+	if s.SymbolNameFn != nil {
+		name = s.SymbolNameFn(s, name)
+	}
 	sym := NewSymbol(s.Spec.SymbolDefFor(name))
 	if fns, ok := s.SpecialSymbolFunctions[name]; ok {
 		for _, fn := range fns {

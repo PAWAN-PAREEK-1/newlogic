@@ -16,9 +16,9 @@ With --bands it also splits every criteria into payout bands, in multiples of th
 cost. Use those shares and averages for payout-range conditions (search_conditions=(from, to)).
 
 Usage (from the repository root):
-    python -m utils.criteria_stats 0_0_gridlines
-    python -m utils.criteria_stats 0_0_gridlines --modes base,surge
-    python -m utils.criteria_stats 0_0_gridlines --modes surge --bands 0.1,0.25,0.5,1,2,5,10,25
+    python -m utils.criteria_stats gridlines
+    python -m utils.criteria_stats gridlines --modes base,surge
+    python -m utils.criteria_stats gridlines --modes surge --bands 0.1,0.25,0.5,1,2,5,10,25
 """
 
 import argparse
@@ -32,7 +32,9 @@ import numpy as np
 def load_mode(library_path: str, mode: str) -> dict:
     """Return {criteria: payouts array} for one mode."""
     lut_path = os.path.join(library_path, "lookup_tables", f"lookUpTable_{mode}.csv")
-    seg_path = os.path.join(library_path, "lookup_tables", f"lookUpTableSegmented_{mode}.csv")
+    seg_path = os.path.join(
+        library_path, "lookup_tables", f"lookUpTableSegmented_{mode}.csv"
+    )
     payouts = {}
     with open(lut_path, "r", encoding="UTF-8") as f:
         for line in f:
@@ -70,8 +72,12 @@ def print_bands(cost: float, max_win: float, by_criteria: dict, edges: list) -> 
         if np.unique(wins).size < 2:
             continue
         below_max = wins[wins < max_win]
-        print(f"  bands of '{criteria}' in multiples of the cost (rounds at the max win are left out)")
-        print(f"    {'from':>8}{'to':>8}{'books':>9}{'share':>9}{'avg x cost':>12}{'avg win':>11}")
+        print(
+            f"  bands of '{criteria}' in multiples of the cost (rounds at the max win are left out)"
+        )
+        print(
+            f"    {'from':>8}{'to':>8}{'books':>9}{'share':>9}{'avg x cost':>12}{'avg win':>11}"
+        )
         for low, high in zip(bounds[:-1], bounds[1:]):
             band = below_max[(below_max > low * cost) & (below_max <= high * cost)]
             average = band.mean() if band.size else 0.0
@@ -83,10 +89,18 @@ def print_bands(cost: float, max_win: float, by_criteria: dict, edges: list) -> 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Unoptimized per-criteria statistics of simulated books")
+    parser = argparse.ArgumentParser(
+        description="Unoptimized per-criteria statistics of simulated books"
+    )
     parser.add_argument("game", help="game id, the folder name under games/")
-    parser.add_argument("--modes", default=None, help="comma-separated bet modes (default: all)")
-    parser.add_argument("--bands", default=None, help="comma-separated band edges in multiples of the mode cost")
+    parser.add_argument(
+        "--modes", default=None, help="comma-separated bet modes (default: all)"
+    )
+    parser.add_argument(
+        "--bands",
+        default=None,
+        help="comma-separated band edges in multiples of the mode cost",
+    )
     args = parser.parse_args()
 
     config = importlib.import_module(f"games.{args.game}.game_config").GameConfig()

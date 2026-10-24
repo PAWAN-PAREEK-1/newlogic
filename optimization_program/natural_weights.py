@@ -30,7 +30,7 @@ Choose targets close to the simulated values (python -m utils.criteria_stats <ga
 further a target average is from the simulated one, the harder the tail is bent.
 
 Usage:
-    python -m optimization_program.natural_weights --game 0_0_gridlines --mode base,surge
+    python -m optimization_program.natural_weights --game gridlines --mode base,surge
 From Python (run_script.py calls this for engine="natural"):
     natural_weights(library_path, mode)
 """
@@ -51,7 +51,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from optimization_program.mode_targets import TWO_POW_50
-from optimization_program.optimization_precheck import PrecheckError, assign_books, parse_fences
+from optimization_program.optimization_precheck import (
+    PrecheckError,
+    assign_books,
+    parse_fences,
+)
 
 
 class NaturalWeightsError(RuntimeError):
@@ -103,7 +107,9 @@ def tilt_to_mean(q: np.ndarray, x: np.ndarray, target: float) -> tuple:
 
 def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
     """Write the natural lookup table of `mode`. Returns a per-criteria report."""
-    with open(os.path.join(library_path, "configs", "math_config.json"), encoding="utf-8") as f:
+    with open(
+        os.path.join(library_path, "configs", "math_config.json"), encoding="utf-8"
+    ) as f:
         math_config = json.load(f)
     fences, cost, mode_rtp = parse_fences(math_config, mode)
     table = pd.read_csv(
@@ -113,7 +119,10 @@ def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
         dtype=np.int64,
     )
     ids, cents = table["id"].to_numpy(), table["cents"].to_numpy()
-    with open(os.path.join(library_path, "forces", f"force_record_{mode}.json"), encoding="utf-8") as f:
+    with open(
+        os.path.join(library_path, "forces", f"force_record_{mode}.json"),
+        encoding="utf-8",
+    ) as f:
         forces = json.load(f)
     try:
         assign_books(fences, ids, cents, forces, mode)
@@ -135,7 +144,9 @@ def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
             target = fence.win_range_start
         else:
             target = fence.avg_win * cost
-            payouts, inverse, counts = np.unique(x, return_inverse=True, return_counts=True)
+            payouts, inverse, counts = np.unique(
+                x, return_inverse=True, return_counts=True
+            )
             if not payouts.min() < target < payouts.max():
                 raise NaturalWeightsError(
                     f"[{mode}] criteria '{fence.name}': target average win {target:,.4f} is outside its books' "
@@ -162,13 +173,23 @@ def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
 
     weights = np.floor(prob * TWO_POW_50).astype(np.uint64)
     if np.any(weights == 0):
-        raise NaturalWeightsError(f"[{mode}] some books would get zero weight - a criteria is too rare for its books.")
+        raise NaturalWeightsError(
+            f"[{mode}] some books would get zero weight - a criteria is too rare for its books."
+        )
 
     order = np.argsort(ids, kind="stable")
     rows = "".join(
-        f"{i},{w},{c}\n" for i, w, c in zip(ids[order].tolist(), weights[order].tolist(), cents[order].tolist())
+        f"{i},{w},{c}\n"
+        for i, w, c in zip(
+            ids[order].tolist(), weights[order].tolist(), cents[order].tolist()
+        )
     )
-    with open(os.path.join(library_path, "publish_files", f"lookUpTable_{mode}_0.csv"), "w", encoding="utf-8", newline="") as f:
+    with open(
+        os.path.join(library_path, "publish_files", f"lookUpTable_{mode}_0.csv"),
+        "w",
+        encoding="utf-8",
+        newline="",
+    ) as f:
         f.write(rows)
 
     # Leave exactly one optimizer candidate behind, so mode_targets.py works on this table.
@@ -177,14 +198,20 @@ def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
     for stale in glob.glob(os.path.join(opt_dir, f"{mode}_0_*.csv")):
         os.remove(stale)
     achieved = float((weights / weights.sum()) @ wins) / cost
-    with open(os.path.join(opt_dir, f"{mode}_0_1.csv"), "w", encoding="utf-8", newline="") as f:
+    with open(
+        os.path.join(opt_dir, f"{mode}_0_1.csv"), "w", encoding="utf-8", newline=""
+    ) as f:
         f.write(f"Name,Natural\nScore,\nLockedUpRTP,\nRtp,{achieved}\nDistribution\n")
         f.write(rows)
 
     report["rtp"] = achieved
     if verbose:
-        print(f"\nNatural weights: {mode} (cost {cost:g}, {len(ids):,} books) - RTP {achieved:.6f} (target {mode_rtp:g})")
-        print(f"  {'criteria':<12}{'books':>9}{'1 in':>16}{'simulated avg':>16}{'target avg':>14}{'rtp':>10}")
+        print(
+            f"\nNatural weights: {mode} (cost {cost:g}, {len(ids):,} books) - RTP {achieved:.6f} (target {mode_rtp:g})"
+        )
+        print(
+            f"  {'criteria':<12}{'books':>9}{'1 in':>16}{'simulated avg':>16}{'target avg':>14}{'rtp':>10}"
+        )
         for row in report["criteria"]:
             print(
                 f"  {row['name']:<12}{row['books']:>9,}{row['one_in']:>16,.2f}{row['simulated_avg_win']:>16,.3f}"
@@ -194,7 +221,9 @@ def natural_weights(library_path: str, mode: str, verbose: bool = True) -> dict:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Natural lookup-table weights (minimum change from the simulation)")
+    parser = argparse.ArgumentParser(
+        description="Natural lookup-table weights (minimum change from the simulation)"
+    )
     parser.add_argument("--game", required=True)
     parser.add_argument("--mode", required=True, help="comma-separated bet modes")
     parser.add_argument("--library", default=None, help="override games/<game>/library")
@@ -202,7 +231,9 @@ def main(argv=None) -> int:
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     os.chdir(root)
     config = importlib.import_module(f"games.{args.game}.game_config").GameConfig()
-    importlib.import_module(f"games.{args.game}.game_optimization").OptimizationSetup(config)
+    importlib.import_module(f"games.{args.game}.game_optimization").OptimizationSetup(
+        config
+    )
     library = args.library or os.path.join(root, "games", args.game, "library")
     failed = 0
     for mode in [m.strip() for m in args.mode.split(",")]:

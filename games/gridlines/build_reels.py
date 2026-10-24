@@ -3,7 +3,7 @@
 The strips are generated, not hand-written, so the maths can be re-tuned by changing a
 count and running this file again:
 
-    python games/0_0_gridlines/build_reels.py
+    python games/gridlines/build_reels.py
 
 Every strip is built with a fixed seed, so the same counts always give the same file.
 Each CSV has one line per stop and one column per reel, the format read by
@@ -31,19 +31,34 @@ STRIPS = {
     "BR0": {
         "seed": 101,
         "counts": {
-            "H1": 8, "H2": 10, "H3": 12, "H4": 14,
-            "L1": 19, "L2": 21, "L3": 21, "L4": 23, "L5": 23,
-            "W": 2, "S": 2,
+            "H1": 8,
+            "H2": 10,
+            "H3": 12,
+            "H4": 14,
+            "L1": 19,
+            "L2": 21,
+            "L3": 21,
+            "L4": 23,
+            "L5": 23,
+            "W": 2,
+            "S": 2,
         },
         "wild_gap": 6,
         "max_stack": 3,
     },
-    # Surge bonus: more wilds, so collapse chains are longer and the multiplier climbs.
+    # Surge and Fusion bonus: more wilds, so collapse chains are longer.
     "FRS": {
         "seed": 202,
         "counts": {
-            "H1": 8, "H2": 10, "H3": 12, "H4": 14,
-            "L1": 19, "L2": 21, "L3": 21, "L4": 23, "L5": 23,
+            "H1": 8,
+            "H2": 10,
+            "H3": 12,
+            "H4": 14,
+            "L1": 19,
+            "L2": 21,
+            "L3": 21,
+            "L4": 23,
+            "L5": 23,
             "W": 6,
         },
         "wild_gap": 4,
@@ -53,32 +68,26 @@ STRIPS = {
     "FRR": {
         "seed": 303,
         "counts": {
-            "H1": 8, "H2": 10, "H3": 12, "H4": 14,
-            "L1": 19, "L2": 21, "L3": 21, "L4": 23, "L5": 23,
+            "H1": 8,
+            "H2": 10,
+            "H3": 12,
+            "H4": 14,
+            "L1": 19,
+            "L2": 21,
+            "L3": 21,
+            "L4": 23,
+            "L5": 23,
             "W": 4,
         },
         "wild_gap": 6,
         "max_stack": 3,
     },
-    # Survival bonus: wilds carry over between spins, so few are needed on the strip.
-    # The wild is on the first three reels only; the last two get one more L5 instead.
-    "FRV": {
-        "seed": 404,
-        "counts": [
-            {
-                "H1": 8, "H2": 10, "H3": 12, "H4": 14,
-                "L1": 19, "L2": 21, "L3": 21, "L4": 23, "L5": 23 if reel < 3 else 24,
-                "W": 1 if reel < 3 else 0,
-            }
-            for reel in range(NUM_REELS)
-        ],
-        "wild_gap": 6,
-        "max_stack": 3,
-    },
-    # Max-win strip: only used by the "wincap" criteria to produce the capped rounds.
+    # Max-win strip: only used by the "wincap" criteria to produce the capped rounds. Four
+    # symbol types and many wilds give the most runs per spin, which is what moves the line
+    # multipliers up (a strip of one symbol pays every line only once per board).
     "WCAP": {
         "seed": 505,
-        "counts": {"H1": 30, "H2": 6, "H3": 4, "H4": 4, "W": 16},
+        "counts": {"H1": 10, "H2": 10, "H3": 10, "H4": 10, "W": 20},
         "wild_gap": 1,
         "max_stack": 5,
     },
@@ -118,7 +127,9 @@ def build_reel(counts: dict, rng: random.Random, wild_gap: int, max_stack: int) 
             and stack_ok(reel, max_stack)
         ):
             return list(reel)
-    raise RuntimeError("Could not build a reel that meets the spacing rules - relax the counts.")
+    raise RuntimeError(
+        "Could not build a reel that meets the spacing rules - relax the counts."
+    )
 
 
 def build_strip(spec: dict) -> list:

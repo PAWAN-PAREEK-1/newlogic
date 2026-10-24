@@ -11,13 +11,13 @@ PIPELINE
 
 HOW TO USE (from the repository root)
 -------------------------------------
-    python -m games.0_0_gridlines.run                    # full pipeline
-    python -m games.0_0_gridlines.run --sims 20000       # same simulation count for every mode
-    python -m games.0_0_gridlines.run --modes base,surge # only some modes
-    python -m games.0_0_gridlines.run --skip-opt         # simulate + configs + checks only
-    python -m games.0_0_gridlines.run --optimizer rust   # SDK optimizer instead of natural weights
+    python -m games.gridlines.run                    # full pipeline
+    python -m games.gridlines.run --sims 20000       # same simulation count for every mode
+    python -m games.gridlines.run --modes base,surge # only some modes
+    python -m games.gridlines.run --skip-opt         # simulate + configs + checks only
+    python -m games.gridlines.run --optimizer rust   # SDK optimizer instead of natural weights
 
-`make run GAME=0_0_gridlines` runs the same file.
+`make run GAME=gridlines` runs the same file.
 """
 
 import argparse
@@ -27,13 +27,15 @@ import sys
 import time
 
 if __package__ in (None, ""):
-    # Started as a script (python games/0_0_gridlines/run.py): make the relative imports work.
+    # Started as a script (python games/gridlines/run.py): make the relative imports work.
     import importlib
 
     _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     if _REPO_ROOT not in sys.path:
         sys.path.insert(0, _REPO_ROOT)
-    __package__ = "games." + os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+    __package__ = "games." + os.path.basename(
+        os.path.dirname(os.path.abspath(__file__))
+    )
     importlib.import_module(__package__)
 
 from .gamestate import GameState
@@ -54,7 +56,7 @@ NUM_SIMS_PER_MODE = {
     "primespin": int(1e5),
     "refine": int(1e5),
     "surge": int(1e5),
-    "survival": int(1e5),
+    "mystery": int(1e5),
 }
 
 RUN_CONDITIONS = {
@@ -79,22 +81,41 @@ def clear_stale_outputs(config, modes: list) -> None:
     for mode in modes:
         for path in (
             os.path.join(config.publish_path, f"lookUpTable_{mode}_0.csv"),
-            os.path.join(config.library_path, "configs", f"books_{mode}.verification.json"),
+            os.path.join(
+                config.library_path, "configs", f"books_{mode}.verification.json"
+            ),
         ):
             if os.path.exists(path):
                 os.remove(path)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="0_0_gridlines pipeline")
-    parser.add_argument("--sims", type=int, default=None, help="simulation count for ALL modes")
-    parser.add_argument("--modes", type=str, default=None, help="comma-separated subset of modes")
-    parser.add_argument("--threads", type=int, default=NUM_THREADS, help="simulation processes")
-    parser.add_argument("--skip-sims", action="store_true", help="reuse the books already in library/")
+    parser = argparse.ArgumentParser(description="gridlines pipeline")
+    parser.add_argument(
+        "--sims", type=int, default=None, help="simulation count for ALL modes"
+    )
+    parser.add_argument(
+        "--modes", type=str, default=None, help="comma-separated subset of modes"
+    )
+    parser.add_argument(
+        "--threads", type=int, default=NUM_THREADS, help="simulation processes"
+    )
+    parser.add_argument(
+        "--skip-sims", action="store_true", help="reuse the books already in library/"
+    )
     parser.add_argument("--skip-opt", action="store_true", help="skip optimization")
-    parser.add_argument("--optimizer", choices=["natural", "rust", "go"], default=OPTIMIZER, help="optimizer engine")
-    parser.add_argument("--skip-analysis", action="store_true", help="skip PAR-sheet analysis")
-    parser.add_argument("--skip-checks", action="store_true", help="skip RGS format checks")
+    parser.add_argument(
+        "--optimizer",
+        choices=["natural", "rust", "go"],
+        default=OPTIMIZER,
+        help="optimizer engine",
+    )
+    parser.add_argument(
+        "--skip-analysis", action="store_true", help="skip PAR-sheet analysis"
+    )
+    parser.add_argument(
+        "--skip-checks", action="store_true", help="skip RGS format checks"
+    )
     args = parser.parse_args()
 
     num_sim_args = dict(NUM_SIMS_PER_MODE)
@@ -142,10 +163,19 @@ def main() -> None:
     if run_conditions["run_optimization"]:
         for mode in target_modes:
             try:
-                OptimizationExecution().run_opt_single_mode(config, mode, OPTIMIZER_THREADS, engine=args.optimizer)
-            except (PrecheckError, TargetError, NaturalWeightsError, subprocess.CalledProcessError) as err:
+                OptimizationExecution().run_opt_single_mode(
+                    config, mode, OPTIMIZER_THREADS, engine=args.optimizer
+                )
+            except (
+                PrecheckError,
+                TargetError,
+                NaturalWeightsError,
+                subprocess.CalledProcessError,
+            ) as err:
                 failed_modes[mode] = str(err).splitlines()[0]
-                print(f"\nOptimization of '{mode}' FAILED - continuing with the other modes.\n")
+                print(
+                    f"\nOptimization of '{mode}' FAILED - continuing with the other modes.\n"
+                )
         generate_configs(gamestate)
 
     if run_conditions["run_analysis"]:
@@ -157,12 +187,16 @@ def main() -> None:
         missing = [
             bm.get_name()
             for bm in config.bet_modes
-            if not os.path.exists(os.path.join(config.publish_path, f"books_{bm.get_name()}.jsonl.zst"))
+            if not os.path.exists(
+                os.path.join(config.publish_path, f"books_{bm.get_name()}.jsonl.zst")
+            )
         ]
         execute_all_tests(config, excluded_modes=missing)
 
     if failed_modes:
-        print("\nOptimization FAILED for these modes (their lookUpTable_<mode>_0.csv is NOT optimized):")
+        print(
+            "\nOptimization FAILED for these modes (their lookUpTable_<mode>_0.csv is NOT optimized):"
+        )
         for mode, reason in failed_modes.items():
             print(f"  - {mode}: {reason}")
         sys.exit(1)

@@ -4,8 +4,8 @@ A Stake Engine maths project with a win logic that is not in the SDK samples: **
 A win is a straight run of 3, 4 or 5 like symbols in any row or column of a 5x5 grid.
 There are no paylines, no "from the first reel" rule and no clusters.
 
-The game is `games/0_0_gridlines`. Its full rules, events and tuning notes are in
-[`games/0_0_gridlines/readme.txt`](games/0_0_gridlines/readme.txt).
+The game is `games/gridlines`. Its full rules, events and tuning notes are in
+[`games/gridlines/readme.txt`](games/gridlines/readme.txt).
 
 | | |
 |---|---|
@@ -70,16 +70,16 @@ Python 3.12 or newer.
 make setup                          # virtual environment + packages
 source env/bin/activate
 
-make run GAME=0_0_gridlines         # simulate, configs, weights, PAR sheet, RGS checks
-make verify GAME=0_0_gridlines      # replay every book against the rules
+make run GAME=gridlines         # simulate, configs, weights, PAR sheet, RGS checks
+make verify GAME=gridlines      # replay every book against the rules
 make test                           # unit tests
 ```
 
 `make run` simulates 100,000 rounds per mode (about 30 minutes on 2 cores). For a quick
-look use `python -m games.0_0_gridlines.run --sims 5000`.
+look use `python -m games.gridlines.run --sims 5000`.
 
 The files to upload to Stake Engine are written to
-`games/0_0_gridlines/library/publish_files/`. `library/` is generated output and is not
+`games/gridlines/library/publish_files/`. `library/` is generated output and is not
 committed.
 
 ## What is in the repository
@@ -91,8 +91,8 @@ same `src/` engine, same optimizer and tools), plus:
 |---|---|
 | `src/calculations/gridlines.py` | **New win logic.** Finds and prices runs in rows and columns. |
 | `src/calculations/collapse.py` | **New board mechanic.** Removes winners, places centre wilds, drops the rest, no refill. |
-| `games/0_0_gridlines/` | The game: config, game state, events, reels, optimizer targets, pipeline. |
-| `games/0_0_gridlines/verify_books.py` | Replays every published book from its events with its own copy of the rules, and compares every win and the payout with the lookup table. |
+| `games/gridlines/` | The game: config, game state, events, reels, optimizer targets, pipeline. |
+| `games/gridlines/verify_books.py` | Replays every published book from its events with its own copy of the rules, and compares every win and the payout with the lookup table. |
 | `optimization_program/natural_weights.py` | Lookup-table weights that keep the simulated win distribution inside every criteria and move it only as far as needed to reach the targets. Used by default. |
 | `utils/criteria_stats.py` | Prints what the simulation produced for each mode and criteria, and per payout band. |
 | `tests/win_calculations/test_gridlinespay.py` | Tests of the win logic. |

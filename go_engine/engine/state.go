@@ -117,6 +117,12 @@ type State struct {
 	RunFreespinFn          func(*State)
 	DrawBoardFn            func(s *State, emitEvent bool, triggerSymbol string)
 	CheckRepeatFn          func(*State)
+	// SymbolNameFn, when set, maps the requested name before a symbol is
+	// created (mirror of a create_symbol override, e.g. symbol upgrades).
+	SymbolNameFn func(s *State, name string) string
+
+	// GameData holds game-specific per-round state owned by the game package.
+	GameData any
 
 	// When set, GetConditions returns this instead of the distribution's
 	// conditions. Used by the superante draw_board override, which in Python

@@ -191,14 +191,18 @@ func writePyIndent(sb *strings.Builder, v any, indent, level int) {
 		}
 		writePyIndent(sb, arr, indent, level)
 	case []int:
-		sb.WriteByte('[')
-		for i, item := range t {
-			if i > 0 {
-				sb.WriteString(", ")
-			}
-			sb.WriteString(strconv.Itoa(item))
+		// json.dumps(indent=...) puts every list item on its own line.
+		arr := make(Arr, len(t))
+		for i := range t {
+			arr[i] = t[i]
 		}
-		sb.WriteByte(']')
+		writePyIndent(sb, arr, indent, level)
+	case []int64:
+		arr := make(Arr, len(t))
+		for i := range t {
+			arr[i] = t[i]
+		}
+		writePyIndent(sb, arr, indent, level)
 	default:
 		writePy(sb, v)
 	}

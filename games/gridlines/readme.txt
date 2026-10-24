@@ -56,7 +56,7 @@ refilled the board only gets emptier, so a spin always ends (at most 12 collapse
 
 This is src/calculations/collapse.py, the counterpart of the SDK's tumble.py (which refills).
 
-Multiplier ladder
+Multiplier ladder (paid spins: base game, wild spin, prime spin)
 * Every spin starts at 1x.
 * Every winning run moves the multiplier one step up this ladder:
 
@@ -66,8 +66,8 @@ Multiplier ladder
   Example: two runs on the first board pay at 1x, the board after the collapse pays at 3x.
 * The first ten steps are +1 each. After that the ladder gets steep, so a long chain is
   worth far more than a short one. This is where the big wins come from.
-* The base game and the feature spins go back to 1x on every spin. The bonus games change
-  this rule, each in its own way (below).
+* The multiplier goes back to 1x on every spin. Nothing is kept from one spin to the next.
+* The bonus games do not use this ladder. They have line multipliers instead (below).
 
 
 ## Bet modes
@@ -89,33 +89,51 @@ land as L3, with 5 removed every low symbol lands as H4. Fewer symbol types mean
 and longer runs, so the spin climbs the ladder faster.
 
 Three or more scatters on the first drop of a paid spin (base, wildspin, primespin) trigger
-one of the three bonus games. Which one is decided by the maths at that moment, never by the
-player. 4 or 5 scatters award a longer bonus. Scatters appear in paid spins only, so a bonus
-cannot retrigger.
+a bonus game. The NUMBER of scatters decides which one, never the player:
 
-All three bonus games use the same win logic and collapse. They differ in what builds up.
+    3 scatters   Refine
+    4 scatters   Surge
+    5 scatters   Survival
 
-### Refine - the symbols build up
-* 5 free spins (7 / 9 with 4 / 5 scatters).
+Scatters appear in paid spins only, so a bonus cannot retrigger.
+
+### What every bonus has and a paid spin does not: line multipliers
+
+* Each of the 5 rows and each of the 5 columns has its own multiplier. All ten start at 1x
+  when the bonus starts.
+* A run pays its paytable value times the multiplier of the row or column it is in.
+* Every winning run moves the multiplier of ITS row or column one step up. The new value
+  applies from the next collapse.
+* Line multipliers are NEVER reset during a bonus: what a line has gained on one spin is
+  still there on every later spin. This is what a paid spin cannot do, and where the big
+  wins of a bonus come from.
+* Ladder of a line (Refine and Surge):
+
+      x1 x2 x3 x4 x6 x9 x13 x20 x30 x45 x65 x100 x150 x250 x400 x600 x1000
+
+* A row run and a column run that cross each pay at their own line's multiplier.
+* The paid-spin ladder is not used in a bonus.
+
+All three bonus games use the same win logic, collapse and line multipliers. Besides the
+scatters that trigger it, each one has its own extra rule.
+
+### Refine (3 scatters) - the symbols get better
+* 5 free spins.
 * After every winning spin the lowest symbol still in play is upgraded for the rest of the
   bonus: L5 lands as L4, then L4 as L3 ... up to H2 landing as H1. Eight upgrades are possible.
-* Every upgrade also moves the START of the following spins one step up the ladder.
-* The multiplier still goes back to that start on every spin.
-* A bonus that wins early snowballs; one that starts with dead spins stays small.
+* Fewer symbol types means more and longer runs, so the lines climb faster on later spins.
 
-### Surge - the ladder never resets
-* 4 free spins (6 / 8).
-* 1 wild is dropped onto the grid on every spin.
-* The multiplier NEVER goes back during the bonus. Every run on every spin is one more
-  step, so the later spins are played on the steep part of the ladder.
+### Surge (4 scatters) - free wilds on every spin
+* 4 free spins.
+* 3 wilds are dropped onto the grid on every spin, before the wins are counted.
 
-### Survival - the wilds and the streak build up
-* No spin counter. 3 lives (4 / 5).
+### Survival (5 scatters) - lives and wilds that stay
+* No spin counter. 3 lives.
 * The bonus starts with 1 wild on the grid.
 * Wilds still on the grid when a spin ends stay in place for the next spin.
-* The multiplier is kept for as long as spins keep winning. Because a streak can run for
-  many spins, Survival uses a plain ladder: +1 per winning run (x1, x2, x3, ...).
-* A spin without a win costs one life and resets the multiplier to 1x.
+* A spin without a win costs one life. The line multipliers are kept.
+* Because the bonus can run for many spins, its lines climb a plain ladder: +2 per winning
+  run (x1, x3, x5, ...).
 * The bonus ends when no life is left (hard stop after 60 spins).
 
 Every bonus pays at least 0.1x: rounds that would pay nothing are not part of the game.
@@ -126,19 +144,25 @@ Every bonus pays at least 0.1x: rounds that would pay nothing are not part of th
 Standard SDK events, unchanged:
     reveal, winInfo, updateTumbleWin, setWin, setTotalWin, updateGlobalMult,
     updateFreeSpin, freeSpinEnd, wincap, finalWin
-updateGlobalMult is sent whenever the multiplier changes value.
+updateGlobalMult is sent whenever the paid-spin multiplier changes value.
 
 Game events (game_events.py):
     primeSymbols    {level, removedSymbols, landAs}     prime spin: symbols removed, before the reveal
     wildDrop        {positions}                         wilds dropped after a reveal
     collapseBoard   {explodingSymbols, newWilds}        one collapse step
-    freeSpinTrigger {bonusType, totalFs, lives, positions}
+    freeSpinTrigger {totalFs, positions, bonusType, lives}   the SDK event plus bonusType and lives
     refineSymbol    {level, removed, into, removedSymbols}
     stickyWilds     {positions}                         survival: wilds on the grid before a reveal
+    updateLineMult  {rows, columns}                     bonus: the multiplier of every row and column
     updateLives     {lives, spin, lostLife}             survival: before each spin and when a life is lost
 
-Positions are {"reel": 0-4, "row": 0-4} with row 0 at the top. The game has no padding rows
-(include_padding = False), so no event offsets its rows.
+The shared events have the same fields and conventions as the SDK's lines games, so one
+frontend reader works for both:
+    * positions are {"reel": 0-4, "row": 1-5}: row = board row + 1, so row 1 is the top of
+      the grid. This holds for every event of this game, including the game events above.
+    * updateFreeSpin "amount" counts from 0: it is sent before the spin counter moves on.
+    * winInfo "meta" has the lines keys - lineIndex, multiplier, winWithoutMult, globalMult,
+      lineMultiplier - followed by direction and overlay, which only a run needs.
 
 Order of events in one spin:
 
@@ -146,14 +170,23 @@ Order of events in one spin:
     reveal                              the 25 symbols
     wildDrop                            (wildspin, surge)
     winInfo, updateTumbleWin            runs on the current board      } repeated while
-    collapseBoard, updateGlobalMult     remove, centre wilds, fall     } the board has runs
+    collapseBoard                       remove, centre wilds, fall     } the board
+    updateGlobalMult / updateLineMult   paid spin / bonus              } has runs
     setWin                              (only if the spin won)
     setTotalWin
 
 collapseBoard does not repeat the whole board. To draw the board after a collapse: remove
 explodingSymbols, put a wild on every newWilds position, then let each reel's symbols fall
-to the bottom in order. winInfo "meta" gives direction ("row" / "column"), lineIndex, the
-multiplier applied (globalMult) and the centre of the run (overlay).
+to the bottom in order. In winInfo "meta", direction is "row" or "column" and lineIndex is
+the board row (0-4, top first) or the reel (0-4) the run is in. multiplier is what the
+win was multiplied by: globalMult x lineMultiplier. In a paid spin globalMult is the ladder
+multiplier and lineMultiplier is 1; in a bonus globalMult is 1 and lineMultiplier is the
+multiplier of the run's row or column. overlay is the centre of the run, where the wild
+appears.
+
+updateLineMult is sent when a bonus starts (all ten lines at 1) and after every collapse
+that changed a value. rows[i] is board row i (top first) and columns[i] is reel i: the same
+index as lineIndex.
 
 verify_books.py replays books from exactly these events, and is a working example of how
 to read them.
@@ -179,10 +212,10 @@ to read them.
 
 From the repository root, after `make setup`:
 
-    python -m games.0_0_gridlines.run                 # simulate, configs, weights, analysis, checks
-    python -m games.0_0_gridlines.run --sims 20000    # quicker run
-    python -m games.0_0_gridlines.verify_books        # replay every book against the rules
-    python -m utils.criteria_stats 0_0_gridlines      # what the simulation produced, per criteria
+    python -m games.gridlines.run                 # simulate, configs, weights, analysis, checks
+    python -m games.gridlines.run --sims 20000    # quicker run
+    python -m games.gridlines.verify_books        # replay every book against the rules
+    python -m utils.criteria_stats gridlines      # what the simulation produced, per criteria
 
 Upload the contents of library/publish_files to Stake Engine.
 
@@ -220,7 +253,7 @@ optimization_program/mode_targets.py.
   wild drops, upgrade ladder, starting wilds), and the wild-drop / prime-level weights
   further down.
 * After any change: simulate, then run
-      python -m utils.criteria_stats 0_0_gridlines --bands 0.1,0.25,0.5,1,2,5,10,25
+      python -m utils.criteria_stats gridlines --bands 0.1,0.25,0.5,1,2,5,10,25
   and move the hit rates, average wins and band averages in game_optimization.py to the
   new simulated values. One criteria per mode is computed ("basegame" for paid spins,
   "freegame" for buys), so each mode always adds up to its RTP.

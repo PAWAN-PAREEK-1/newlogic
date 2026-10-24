@@ -1,7 +1,7 @@
 PYTHON := python3
 VENV_DIR := env
 VENV_PY := $(VENV_DIR)/bin/python
-TEST_NAMES = 0_0_gridlines
+TEST_NAMES = gridlines
 
 ifeq ($(OS),Windows_NT)
 	VENV_PY := $(VENV_DIR)\Scripts\python.exe
@@ -28,11 +28,19 @@ setup: packInstall
 	@echo "$(ACTIVATE)"
 
 
-# Games use relative imports, so they are run as modules: make run GAME=0_0_gridlines
+# Games use relative imports, so they are run as modules: make run GAME=gridlines
 run:
 	$(VENV_PY) -m games.$(GAME).run
 
-# Replay every published book against the game rules: make verify GAME=0_0_gridlines
+# Same pipeline with the Go engine (books + optimizer, needs Go): make run_go GAME=gridlines
+run_go:
+	$(VENV_PY) -m games.$(GAME).run_go
+
+# Byte-compare the Go engine's books against the Python engine's
+parity:
+	$(VENV_PY) go_engine/tools/verify_parity.py
+
+# Replay every published book against the game rules: make verify GAME=gridlines
 verify:
 	$(VENV_PY) -m games.$(GAME).verify_books
 

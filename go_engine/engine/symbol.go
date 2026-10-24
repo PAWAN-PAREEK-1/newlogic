@@ -9,9 +9,10 @@ package engine
 // SymbolDef mirrors SymbolDefinition: name plus which special properties
 // (wild / scatter / multiplier / prize / ...) the symbol carries.
 type SymbolDef struct {
-	Name    string
-	Flags   map[string]bool
-	Special bool
+	Name     string
+	Flags    map[string]bool
+	Special  bool
+	IsPaying bool // the symbol has paytable entries (SymbolDefinition.is_paying)
 }
 
 // Symbol mirrors the Python Symbol instance. Python initialises
@@ -24,6 +25,7 @@ type Symbol struct {
 	MultSet    bool // whether the multiplier slot holds a value (Python: not None)
 	Prize      int64
 	PrizeSet   bool
+	Explode    bool // part of a win, removed by the next tumble/collapse
 }
 
 // NewSymbol mirrors Symbol.__init__ + assign_default_attribute.

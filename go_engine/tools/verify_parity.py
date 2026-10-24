@@ -1,6 +1,6 @@
 """Byte-level parity check: Python engine vs Go engine.
 
-Copies games/expwilds to a TEMPORARY game (games/expwilds_paritytmp), runs
+Copies games/gridlines to a TEMPORARY game (games/gridlines_paritytmp), runs
 BOTH engines there on the same small simulation counts, and byte-diffs every
 output file. The real game's library/ is never touched, so this is safe to
 run at any time - including right after a production run.
@@ -26,16 +26,16 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, REPO)
 os.chdir(REPO)
 
-SRC_GAME = "expwilds"
-TMP_GAME = "expwilds_paritytmp"
+SRC_GAME = "gridlines"
+TMP_GAME = "gridlines_paritytmp"
 
 DEFAULT_SIMS = {
     "base": 2000,
-    "ante": 1000,
-    "bonus": 300,
-    "superbonus": 200,
-    # "hyperbonus": 200,
-    "superante": 500,
+    "wildspin": 1000,
+    "primespin": 1000,
+    "refine": 300,
+    "surge": 300,
+    "mystery": 600,
 }
 
 

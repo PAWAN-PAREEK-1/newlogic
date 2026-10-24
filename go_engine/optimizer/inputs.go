@@ -409,8 +409,13 @@ func assignBooks(fences []*Fence, books []Book, forces []forceOption) error {
 				if !ok {
 					continue
 				}
+				// A search fence with a payout range only takes the matched books inside it.
+				ranged := f.WinRangeStart > -1 && f.WinRangeEnd > f.WinRangeStart
 				for _, id := range opt.BookIDs {
 					if i, exists := pos[id]; exists && remaining[i] && !taken[i] {
+						if ranged && (books[i].Win() <= f.WinRangeStart || books[i].Win() > f.WinRangeEnd) {
+							continue
+						}
 						taken[i] = true
 						members = append(members, i)
 					}
